@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Alejandrino
 
-## Getting Started
+Biblioteca personal de técnicas de grappling, pensada principalmente para
+usarse desde el teléfono Android.
 
-First, run the development server:
+## Funciones actuales
+
+- Guardar rápidamente enlaces de TikTok, Instagram y YouTube.
+- Clasificar las técnicas después de guardarlas.
+- Editar nombre, disciplina, posición y categoría.
+- Buscar técnicas y filtrar las pendientes de clasificación.
+- Detectar enlaces repetidos.
+- Eliminar técnicas.
+- Conservar la biblioteca en el navegador mediante localStorage.
+
+La aplicación guarda enlaces, no descarga los videos.
+
+## Desarrollo local
+
+Instalar las dependencias:
+
+```bash
+npm install
+```
+
+Iniciar el servidor:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abrir http://localhost:3000 en el navegador.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Para probar desde Android, conectar el teléfono a la misma red Wi-Fi
+del computador y abrir la dirección Network que muestra la terminal.
+El servidor debe permanecer encendido.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Estructura principal
 
-## Learn More
+- `app/page.tsx`: guardado rápido, búsqueda y almacenamiento local.
+- `app/components/TechniqueCard.tsx`: visualización, edición y eliminación.
+- `app/types/technique.ts`: modelo de datos y clasificación pendiente.
 
-To learn more about Next.js, take a look at the following resources:
+## Tecnologías
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Next.js, React, TypeScript y Tailwind CSS.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Almacenamiento actual
 
-## Deploy on Vercel
+Los datos pertenecen al navegador y a la dirección desde la que se abre
+la aplicación. Todavía no se sincronizan entre el computador y el teléfono.
+Borrar los datos del sitio puede eliminar la biblioteca local.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Próximas etapas
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Inicio de sesión.
+- Biblioteca sincronizada entre dispositivos.
+- Importación de enlaces guardados anteriormente.
+- Integración con el menú Compartir de Android.
+
+## Licencia
+
+Consultar el archivo LICENSE.
