@@ -11,7 +11,12 @@ export function configurationError(): string | null {
   if (!key.startsWith("sb_publishable_")) {
     return "Esta versión espera la clave Publishable de Supabase, que empieza con sb_publishable_.";
   }
-  try { if (new URL(url).protocol !== "https:") throw new Error(); }
+  try {
+    const parsed = new URL(url);
+    if (!url.startsWith("https://") || parsed.protocol !== "https:" ||
+        parsed.username || parsed.password || !parsed.hostname.includes(".") ||
+        parsed.pathname !== "/" || parsed.search || parsed.hash) throw new Error();
+  }
   catch { return "La URL del proyecto Supabase debe ser una dirección https válida."; }
   return null;
 }
