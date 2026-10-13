@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import type { User } from "@supabase/supabase-js";
 import TechniqueCard from "./TechniqueCard";
+import { useVideoMetadata } from "../lib/use-video-metadata";
 import { isPending, type Technique } from "../types/technique";
 import { errorMessage, getSupabase } from "../lib/supabase";
 import { addTechnique, deleteTechnique, draftFromText, editTechnique, importTechniques,
@@ -23,6 +24,8 @@ export default function Library({ user }: { user: User }) {
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const [reload, setReload] = useState(0);
+  const { metadata, metadataRunning, metadataMessage, refreshMetadata } =
+    useVideoMetadata(techniques.map(item => item.id), user.id, reload);
   const inputRef = useRef<HTMLInputElement>(null);
   const mounted = useRef(false);
   const mutation = useRef(false);
@@ -154,7 +157,8 @@ export default function Library({ user }: { user: User }) {
   const pendingCount = techniques.filter(isPending).length;
   const needle = searchable(query.trim());
   const visible = techniques.filter(item => (!onlyPending || isPending(item)) &&
-    searchable([item.name, item.discipline, item.position, item.category, item.source, item.url].join(" ")).includes(needle));
+    searchable([item.name, item.discipline, item.position, item.category, item.source, item.url,
+      metadata[item.id]?.title, metadata[item.id]?.author].join(" ")).includes(needle));
 
   return (
     <>
@@ -187,8 +191,9 @@ export default function Library({ user }: { user: User }) {
             {refreshing ? "Actualizando…" : "Actualizar"}
           </button>
         </div>
+        {metadataMessage && <p role="status" className="mb-4 text-sm text-zinc-400">{metadataMessage}</p>}
         <label htmlFor="search" className="sr-only">Buscar videos</label>
-        <input id="search" type="search" value={query} className={inputClass} placeholder="Buscar por nombre, posición o plataforma"
+        <input id="search" type="search" value={query} className={inputClass} placeholder="Buscar por nombre, autor, posición o plataforma"
           onChange={event => setQuery(event.target.value)} />
         <div className="my-4 grid grid-cols-2 gap-3">
           {[false, true].map(pending => <button key={String(pending)} type="button" aria-pressed={onlyPending === pending}
@@ -201,7 +206,9 @@ export default function Library({ user }: { user: User }) {
           : visible.length === 0 ? <p className="rounded-2xl border border-dashed border-zinc-700 p-6 text-zinc-400">
             {techniques.length === 0 ? "Pega tu primer enlace arriba para guardarlo." : "No hay videos que coincidan con este filtro."}</p>
           : <div className="grid gap-4">{visible.map(item => <TechniqueCard key={item.id} technique={item}
-            disabled={busy} onUpdate={update} onDelete={remove} />)}</div>}
+            disabled={busy} onUpdate={update} onDelete={remove}
+            metadata={metadata[item.id]} metadataBusy={!!metadataRunning[item.id]}
+            onRefreshMetadata={() => void refreshMetadata(item.id)} />)}</div>}
       </section>
       <details className="mt-8 rounded-2xl border border-zinc-800 p-4 text-sm text-zinc-400">
         <summary className="min-h-11 cursor-pointer py-3 text-zinc-200">Importar mis enlaces anteriores</summary>

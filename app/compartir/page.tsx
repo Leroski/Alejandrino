@@ -8,6 +8,7 @@ import AuthGate from "../components/AuthGate";
 import { addTechnique, draftFromText } from "../lib/techniques";
 import { sharedLink } from "../lib/shared-link";
 import { errorMessage } from "../lib/supabase";
+import { requestVideoMetadata } from "../lib/video-metadata";
 
 function SaveSharedLink({ initialUrl, user }: { initialUrl: string; user: User }) {
   const [url, setUrl] = useState(initialUrl);
@@ -24,6 +25,9 @@ function SaveSharedLink({ initialUrl, user }: { initialUrl: string; user: User }
     setError("");
     try {
       const item = await addTechnique(user.id, draftFromText(url));
+      // La confirmación de guardado no espera a la vista previa. Si cierras la app,
+      // la biblioteca vuelve a intentar las consultas pendientes cuando la abras.
+      if (item) void requestVideoMetadata(item.id, user.id).catch(() => {});
       setNotice(item ? "Guardado en tu biblioteca." : "Este enlace ya estaba guardado.");
     } catch (cause) {
       setError(errorMessage(cause));
