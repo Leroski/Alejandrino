@@ -3,7 +3,12 @@
 import { useState, type FormEvent } from "react";
 import { cleanField, isPending, type Technique } from "../types/technique";
 
+import { metadataMessage, safeThumbnail, type VideoMetadata } from "../types/video-metadata";
+
 type Props = {
+  metadata?: VideoMetadata;
+  metadataBusy: boolean;
+  onRefreshMetadata: () => void;
   technique: Technique;
   disabled: boolean;
   onDelete: (technique: Technique) => Promise<void>;
@@ -18,10 +23,13 @@ const fields = [
 ] as const;
 const button = "min-h-11 rounded-xl px-3 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-red-400 disabled:opacity-50";
 
-export default function TechniqueCard({ technique, disabled, onDelete, onUpdate }: Props) {
+export default function TechniqueCard({ technique, disabled, onDelete, onUpdate, metadata, metadataBusy, onRefreshMetadata }: Props) {
   // Captura también la revisión: una actualización de fondo no pisa el borrador.
   const [draft, setDraft] = useState<Technique | null>(null);
   const [error, setError] = useState("");
+  const [brokenThumbnail, setBrokenThumbnail] = useState("");
+  const thumbnail = safeThumbnail(metadata?.thumbnail_url);
+  const previewMessage = metadataBusy ? "Buscando información del video…" : metadataMessage(metadata);
   const pending = isPending(technique);
   const labels = [technique.discipline, technique.position, technique.category].map(cleanField).filter(Boolean);
 
@@ -43,7 +51,31 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate 
         <span className="rounded-full bg-zinc-800 px-3 py-1">{technique.source}</span>
         {pending && <span className="text-amber-300">Sin clasificar</span>}
       </div>
-      <h3 className="break-words text-lg font-semibold">{technique.name}</h3>
+      <div className="flex min-w-0 items-start gap-3">
+        {thumbnail && brokenThumbnail !== `${thumbnail}:${metadata?.attempted_at}` && (
+          <a href={technique.url} target="_blank" rel="noopener noreferrer" aria-label="Abrir video original"
+            className="h-24 w-20 shrink-0 overflow-hidden rounded-xl bg-zinc-800 sm:w-28">
+            {/* URL pública del proveedor; no pasa por un optimizador ni se almacena aquí. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={thumbnail} alt="" width={112} height={96} loading="lazy" decoding="async"
+              referrerPolicy="no-referrer" className="h-full w-full object-cover"
+              onError={() => setBrokenThumbnail(`${thumbnail}:${metadata?.attempted_at}`)} />
+          </a>
+        )}
+        <div className="min-w-0 flex-1">
+          <h3 className="break-words text-lg font-semibold">{technique.name}</h3>
+          {metadata?.title && <p className="mt-1 line-clamp-3 break-words text-sm text-zinc-200">{metadata.title}</p>}
+          {metadata?.author && <p className="mt-2 break-words text-sm text-zinc-400">Por {metadata.author}</p>}
+        </div>
+      </div>
+      {previewMessage && <p className="mt-3 text-sm text-zinc-400">{previewMessage}</p>}
+      {thumbnail && brokenThumbnail === `${thumbnail}:${metadata?.attempted_at}` &&
+        <p className="mt-2 text-sm text-zinc-400">La miniatura ya no está disponible. Puedes actualizar la vista previa.</p>}
+      {metadata?.reason !== "instagram" && metadata?.reason !== "unsupported" &&
+        <button type="button" disabled={disabled || metadataBusy} onClick={onRefreshMetadata}
+          className="mt-1 min-h-11 py-2 text-sm text-zinc-400 underline underline-offset-4 disabled:opacity-50">
+          {metadataBusy ? "Consultando…" : "Actualizar vista previa"}
+        </button>}
       <p className="mt-1 truncate text-sm text-zinc-400" title={technique.url}>{technique.url}</p>
       {labels.length > 0 && <p className="mt-3 break-words text-sm text-zinc-300">{labels.join(" · ")}</p>}
       <div className="mt-4 grid grid-cols-3 gap-2">
