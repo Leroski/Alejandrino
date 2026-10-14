@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#101114">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-u9/UlWkVYUjyzdo0GoazMpfJtZkKlVEZ5lhM98Ix/zw='; style-src 'unsafe-inline'; media-src blob:; img-src data:; connect-src 'none'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>Alejandrino · Prueba de video local</title>
+  <!-- alejandrino-local-probe-v1 -->
+  <style>
+    :root { color-scheme: dark; font: 16px/1.5 system-ui, sans-serif; background: #101114; color: #f4f4f5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 740px; margin: auto; padding: 28px 18px 60px; }
+    a { color: #e4e4e7; text-underline-offset: 4px; }
+    .eyebrow { color: #a1a1aa; font-size: .78rem; letter-spacing: .13em; text-transform: uppercase; margin: 30px 0 8px; }
+    h1 { font-size: clamp(1.75rem, 6vw, 2.5rem); line-height: 1.15; letter-spacing: -.03em; margin: 0 0 16px; }
+    h2 { font-size: 1.13rem; margin: 0 0 10px; }
+    p { margin: 10px 0; }
+    .muted, small { color: #b1b1bc; }
+    small { display: block; }
+    .card { background: #191a1f; border: 1px solid #31323a; border-radius: 18px; padding: 20px; margin: 18px 0; }
+    .notice { border-left: 3px solid #f43f5e; padding: 10px 14px; background: #21171c; border-radius: 4px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 12px; }
+    button { font: inherit; color: inherit; background: #303139; border: 1px solid transparent; border-radius: 10px; min-height: 48px; padding: 11px 16px; cursor: pointer; }
+    button.primary { background: #df1234; font-weight: 650; }
+    button:hover:not(:disabled) { filter: brightness(1.15); }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    :focus-visible { outline: 3px solid #fda4af; outline-offset: 4px; }
+    dl { margin: 0; }
+    dl > div { padding: 11px 0; border-bottom: 1px solid #303139; }
+    dl > div:last-child { border: 0; padding-bottom: 0; }
+    dt { color: #b1b1bc; font-size: .84rem; }
+    dd { margin: 3px 0 0; overflow-wrap: anywhere; }
+    ol { padding-left: 23px; }
+    li { padding: 4px 0; }
+    video { display: block; background: #09090b; width: 100%; max-height: 380px; border-radius: 10px; margin-top: 16px; }
+    textarea { width: 100%; min-height: 320px; background: #101114; color: #e4e4e7; border: 1px solid #44444f; border-radius: 8px; padding: 12px; font: .8rem/1.6 ui-monospace, monospace; resize: vertical; }
+    details > summary { cursor: pointer; min-height: 44px; padding: 10px 0; }
+    .status { overflow-wrap: anywhere; }
+    #error:not(:empty) { padding: 12px; background: #321820; border-radius: 8px; color: #fecdd3; }
+    [hidden] { display: none !important; }
+    @media (max-width: 420px) { .card { padding: 16px; } .actions button { flex: 1 1 180px; } }
+  </style>
+</head>
+<body>
+<main>
+  <a href="/">← Volver a Alejandrino</a>
+  <p class="eyebrow">Prueba de compatibilidad · versión 1</p>
+  <h1>Tu video, en este dispositivo.</h1>
+  <p class="muted">Comprobemos si el navegador puede recordar un archivo y reproducirlo después de cerrar la página.</p>
+  <p class="notice">El video se lee desde el archivo que elijas. Esta prueba no lo sube ni guarda una copia. Solo intenta conservar su referencia en este navegador.</p>
+
+  <section class="card" aria-labelledby="select-heading">
+    <h2 id="select-heading">1. Elige un video del teléfono</h2>
+    <p class="muted">Usa un MP4 corto que esté descargado en el almacenamiento interno. Puedes grabar uno de pocos segundos con la cámara.</p>
+    <p id="capability" class="status" role="status">Comprobando el navegador…</p>
+    <div class="actions">
+      <button id="choose" class="primary" disabled>Elegir y recordar video</button>
+      <button id="temporary" disabled>Probar selección temporal</button>
+    </div>
+    <input id="file-input" type="file" accept="video/*,.mp4,.webm,.m4v,.mov,.3gp" hidden>
+    <small>La selección temporal permite reproducir ahora, pero exige elegir el archivo otra vez al volver.</small>
+  </section>
+
+  <section class="card" aria-labelledby="reopen-heading">
+    <h2 id="reopen-heading">2. Comprueba que lo recuerda</h2>
+    <dl>
+      <div><dt>Archivo</dt><dd id="filename">Ninguno seleccionado</dd></div>
+      <div><dt>Referencia</dt><dd id="reference">Comprobando…</dd></div>
+      <div><dt>Permiso de lectura</dt><dd id="permission">Sin comprobar</dd></div>
+      <div><dt>Reproducción en esta apertura</dt><dd id="playback">Sin probar</dd></div>
+    </dl>
+    <div class="actions"><button id="reopen" disabled>Abrir video guardado</button></div>
+    <p class="muted">Reproduce el video. Después cierra la pestaña y vuelve a abrir <strong>esta misma dirección</strong> en Samsung Internet. Pulsa «Abrir video guardado». Puede pedir permiso, pero lo que queremos comprobar es si evita elegir el archivo de nuevo.</p>
+    <video id="player" controls playsinline preload="metadata" hidden aria-label="Video local de prueba"></video>
+    <p id="message" class="status" role="status" aria-live="polite"></p>
+    <p id="error" class="status" role="alert"></p>
+  </section>
+
+  <section class="card" aria-labelledby="offline-heading">
+    <h2 id="offline-heading">3. Prueba sin Internet</h2>
+    <p id="network" class="muted"></p>
+    <p id="offline-state" class="status">La página aún no está preparada para abrirse sin conexión.</p>
+    <div class="actions"><button id="prepare" disabled>Preparar prueba sin conexión</button></div>
+    <ol class="muted">
+      <li>Pulsa el botón y espera la confirmación.</li>
+      <li>Activa modo avión y comprueba que el Wi-Fi también esté apagado.</li>
+      <li>Cierra la pestaña y vuelve a abrir exactamente esta dirección.</li>
+      <li>Pulsa «Abrir video guardado» y luego reproducir.</li>
+    </ol>
+    <small>Solo se guarda esta pantalla para abrirla sin Internet. La biblioteca principal todavía no tiene modo sin conexión.</small>
+  </section>
+
+  <section class="card" aria-labelledby="report-heading">
+    <h2 id="report-heading">Comparte el resultado</h2>
+    <p class="muted">Copia el resultado y pégalo en nuestra conversación. No incluye el nombre del archivo ni su contenido. Indica también si cerraste y reabriste la página con modo avión.</p>
+    <div class="actions"><button id="copy">Copiar resultado</button></div>
+    <details id="report-details">
+      <summary>Ver resultado</summary>
+      <textarea id="report" readonly aria-label="Resultado de la prueba" spellcheck="false"></textarea>
+    </details>
+  </section>
+  <button id="clear" disabled>Borrar datos de esta prueba</button>
+  <small>Elimina la referencia y la copia de esta pantalla. Conserva el video original y las fichas de tu biblioteca. Esta prueba es independiente de tu cuenta de Alejandrino.</small>
+</main>
+<script>
+"use strict";
+(() => {
+  const DB = "alejandrino-local-probe-v1";
+  const CACHE_PREFIX = "alejandrino-local-probe-shell-";
+  const PAGE = new URL("prueba-local.html", location.href);
+  const WORKER = new URL("prueba-local-sw.js", PAGE);
+  const $ = id => document.getElementById(id);
+  const session = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  const pickerAvailable = typeof window.showOpenFilePicker === "function";
+  let database, saved, objectURL, busy = false, loaded = false, mode = "ninguno";
+  const result = {
+    version: 1,
+    origen: location.origin,
+    navegador: navigator.userAgent,
+    contextoSeguro: window.isSecureContext,
+    selectorPersistente: pickerAvailable,
+    indexedDB: "pendiente",
+    referenciaGuardada: false,
+    referenciaRecuperadaAlAbrir: false,
+    permiso: "sin comprobar",
+    archivoLeido: false,
+    reproduccion: false,
+    reproduccionDeReferenciaRecuperada: false,
+    reproduccionSinConexionIndicada: false,
+    pantallaSinConexion: false,
+    error: "ninguno"
+  };
+
+  function report() {
+    $("report").value = JSON.stringify({ ...result, seleccionActual: mode, conexionIndicada: navigator.onLine }, null, 2);
+  }
+  function notify(text) { $("message").textContent = text; report(); }
+  function updateButtons() {
+    $("choose").disabled = busy || !loaded || !pickerAvailable || !window.isSecureContext;
+    $("temporary").disabled = busy || !loaded;
+    $("reopen").disabled = busy || !saved?.handle;
+    $("prepare").disabled = busy || !loaded || !window.isSecureContext || !("serviceWorker" in navigator);
+    $("clear").disabled = busy || !loaded;
+  }
+  function setBusy(value) { busy = value; updateButtons(); }
+  function clearError() { $("error").textContent = ""; result.error = "ninguno"; }
+  function fail(error, context) {
+    result.error = `${context}: ${error?.name || "Error"}`;
+    const meanings = {
+      NotAllowedError: "El navegador no concedió el permiso de lectura.",
+      NotFoundError: "El archivo ya no está disponible en esa referencia. Vuelve a elegirlo.",
+      NotReadableError: "El navegador no pudo leer ese archivo. Comprueba que esté descargado en el dispositivo.",
+      DataCloneError: "Este navegador no pudo guardar la referencia. La selección temporal no soluciona esa limitación.",
+      SecurityError: "El navegador bloqueó esta operación. Abre la dirección HTTPS directamente en Samsung Internet.",
+      QuotaExceededError: "No hay espacio disponible para los datos de la prueba.",
+      NotSupportedError: "Esta operación no está disponible en este navegador.",
+      TimeoutError: "La preparación tardó demasiado. Comprueba la conexión y vuelve a intentarlo."
+    };
+    $("error").textContent = `${context}. ${meanings[error?.name] || "No se pudo completar la operación."} (${error?.name || "Error"})`;
+    report();
+  }
+  function permission(value) {
+    result.permiso = value;
+    $("permission").textContent = ({ granted: "Concedido", prompt: "Debe pedir permiso al abrir", denied: "No concedido" })[value] || value;
+  }
+  function transaction(operation, value) {
+    if (!database) return Promise.reject(new DOMException("Unavailable", "InvalidStateError"));
+    return new Promise((resolve, reject) => {
+      const tx = database.transaction("reference", operation === "get" ? "readonly" : "readwrite");
+      const store = tx.objectStore("reference");
+      const request = operation === "put" ? store.put(value, "video") : store[operation]("video");
+      tx.oncomplete = () => resolve(request.result);
+      tx.onabort = () => reject(tx.error || request.error || new Error("Transaction aborted"));
+      tx.onerror = () => {}; // onabort comunica el fallo sin ocultar la cancelación.
+    });
+  }
+  function openDatabase() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB, 1);
+      request.onupgradeneeded = () => request.result.createObjectStore("reference");
+      request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new DOMException("Blocked", "InvalidStateError"));
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+  function releaseVideo() {
+    const player = $("player");
+    player.pause(); player.removeAttribute("src"); player.load(); player.hidden = true;
+    if (objectURL) URL.revokeObjectURL(objectURL);
+    objectURL = undefined;
+  }
+  function displayFile(file, source) {
+    releaseVideo();
+    mode = source;
+    result.archivoLeido = true;
+    result.reproduccion = false;
+    $("filename").textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)} MB`;
+    $("playback").textContent = "Pulsa reproducir en el video";
+    objectURL = URL.createObjectURL(file);
+    $("player").src = objectURL;
+    $("player").hidden = false;
+    report();
+  }
+  function isVideo(file) {
+    return file.size > 0 && (file.type.startsWith("video/") || /\.(mp4|webm|mov|m4v|3gp)$/i.test(file.name));
+  }
+  $("choose").addEventListener("click", async () => {
+    if (busy) return;
+    setBusy(true); clearError();
+    try {
+      // El selector se invoca directamente desde el gesto del usuario.
+      const [handle] = await window.showOpenFilePicker({ multiple: false,
+        types: [{ description: "Videos", accept: { "video/*": [".mp4", ".webm", ".mov", ".m4v", ".3gp"] } }] });
+      const file = await handle.getFile();
+      if (!isVideo(file)) { notify("Elige un archivo de video no vacío."); return; }
+      const record = { handle, session, selectedAt: new Date().toISOString() };
+      // Se guarda el handle, nunca File, Blob, bytes del video ni miniaturas.
+      await transaction("put", record);
+      saved = record;
+      result.referenciaGuardada = true;
+      result.referenciaRecuperadaAlAbrir = false;
+      result.reproduccionDeReferenciaRecuperada = false;
+      result.reproduccionSinConexionIndicada = false;
+      $("reference").textContent = "Guardada. Falta cerrar y volver a abrir esta página.";
+      permission(typeof handle.queryPermission === "function" ? await handle.queryPermission({ mode: "read" }) : "API de permisos no disponible");
+      displayFile(file, "referencia");
+      notify("Referencia guardada en este navegador. Reproduce el video y luego cierra y reabre esta dirección.");
+    } catch (error) {
+      if (error?.name === "AbortError") notify("Selección cancelada. Se conserva la referencia anterior, si existía.");
+      else fail(error, "No se pudo recordar el video");
+    } finally { setBusy(false); }
+  });
+  $("temporary").addEventListener("click", () => {
+    $("file-input").value = "";
+    $("file-input").click();
+  });
+  $("file-input").addEventListener("change", () => {
+    const file = $("file-input").files?.[0];
+    if (!file) return;
+    clearError();
+    if (!isVideo(file)) { notify("Elige un archivo de video no vacío."); return; }
+    displayFile(file, "temporal");
+    notify("Este video solo está disponible durante esta apertura. No se ha guardado su referencia." + (saved ? " La referencia guardada anterior se conserva." : ""));
+  });
+  $("reopen").addEventListener("click", async () => {
+    if (busy || !saved?.handle) return;
+    setBusy(true); clearError();
+    try {
+      const handle = saved.handle;
+      // Pide solo lectura y antes de esperar cualquier acceso a IndexedDB.
+      if (typeof handle.requestPermission === "function") {
+        const state = await handle.requestPermission({ mode: "read" });
+        permission(state);
+        if (state !== "granted") throw new DOMException("Denied", "NotAllowedError");
+      }
+      const file = await handle.getFile();
+      displayFile(file, "referencia");
+      notify("Archivo abierto desde la referencia guardada. Pulsa reproducir.");
+    } catch (error) { fail(error, "No se pudo abrir la referencia"); }
+    finally { setBusy(false); }
+  });
+  $("player").addEventListener("playing", () => {
+    result.reproduccion = true;
+    if (mode === "referencia" && result.referenciaRecuperadaAlAbrir) {
+      result.reproduccionDeReferenciaRecuperada = true;
+      if (!navigator.onLine) result.reproduccionSinConexionIndicada = true;
+    }
+    $("playback").textContent = navigator.onLine ? "Reproducción iniciada" : "Reproducción iniciada sin conexión indicada";
+    report();
+  });
+  $("player").addEventListener("error", () => {
+    if (!objectURL) return;
+    $("playback").textContent = "No se pudo reproducir este formato";
+    result.error = `Reproductor: MediaError ${$("player").error?.code || "desconocido"}`;
+    $("error").textContent = "El reproductor no pudo abrir el video. Prueba un MP4 corto grabado con la cámara; el permiso de archivo y el formato de video son comprobaciones distintas.";
+    report();
+  });
+  function activated(registration) {
+    if (registration.active?.state === "activated") return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new DOMException("Timeout", "TimeoutError")), 20000);
+      const watch = worker => {
+        if (!worker) return;
+        const check = () => {
+          if (worker.state === "activated") { clearTimeout(timer); resolve(); }
+          if (worker.state === "redundant") { clearTimeout(timer); reject(new Error("Installation failed")); }
+        };
+        worker.addEventListener("statechange", check); check();
+      };
+      watch(registration.installing || registration.waiting || registration.active);
+      registration.addEventListener("updatefound", () => watch(registration.installing));
+    });
+  }
+  async function offlineReady() {
+    if (!("serviceWorker" in navigator) || !("caches" in window)) return false;
+    const registration = await navigator.serviceWorker.getRegistration(PAGE.href);
+    if (registration?.scope !== PAGE.href || registration.active?.scriptURL !== WORKER.href) return false;
+    for (const name of await caches.keys()) {
+      if (name.startsWith(CACHE_PREFIX) && await (await caches.open(name)).match(PAGE.href)) return true;
+    }
+    return false;
+  }
+  async function offlineStatus() {
+    result.pantallaSinConexion = await offlineReady();
+    $("offline-state").textContent = result.pantallaSinConexion
+      ? "Pantalla preparada para abrirse sin conexión. Falta comprobar el video en modo avión."
+      : "La página aún no está preparada para abrirse sin conexión.";
+    report();
+  }
+  $("prepare").addEventListener("click", async () => {
+    if (busy) return;
+    setBusy(true); clearError();
+    $("offline-state").textContent = "Guardando esta pantalla para la prueba…";
+    try {
+      const registration = await navigator.serviceWorker.register(WORKER.href, { scope: PAGE.pathname, updateViaCache: "none" });
+      await activated(registration);
+      await offlineStatus();
+      if (!result.pantallaSinConexion) throw new Error("Cache unavailable");
+      notify("Ya puedes cerrar la página y volver a abrir esta dirección en modo avión. Usa el mismo navegador y dominio.");
+    } catch (error) {
+      $("offline-state").textContent = "No se pudo preparar la pantalla sin conexión.";
+      fail(error, "Falló la preparación sin conexión");
+    } finally { setBusy(false); }
+  });
+  $("copy").addEventListener("click", async () => {
+    report();
+    try { await navigator.clipboard.writeText($("report").value); notify("Resultado copiado. Pégalo en nuestra conversación."); }
+    catch { $("report-details").open = true; $("report").focus(); $("report").select(); notify("Selecciona y copia el resultado que aparece abajo."); }
+  });
+  $("clear").addEventListener("click", async () => {
+    if (busy) return;
+    setBusy(true); clearError();
+    try {
+      if (database) await transaction("delete");
+      saved = undefined; releaseVideo(); mode = "ninguno";
+      if ("serviceWorker" in navigator) {
+        for (const registration of await navigator.serviceWorker.getRegistrations()) {
+          if (registration.scope === PAGE.href &&
+              [registration.active, registration.waiting, registration.installing].some(worker => worker?.scriptURL === WORKER.href)) {
+            await registration.unregister();
+          }
+        }
+      }
+      if ("caches" in window) for (const name of await caches.keys()) if (name.startsWith(CACHE_PREFIX)) await caches.delete(name);
+      Object.assign(result, { referenciaGuardada: false, referenciaRecuperadaAlAbrir: false,
+        archivoLeido: false, reproduccion: false, reproduccionDeReferenciaRecuperada: false,
+        reproduccionSinConexionIndicada: false, pantallaSinConexion: false });
+      $("filename").textContent = "Ninguno seleccionado";
+      $("reference").textContent = "Sin referencia guardada";
+      $("playback").textContent = "Sin probar";
+      $("offline-state").textContent = "Datos de la prueba eliminados. Cierra esta pestaña para terminar de retirar su modo sin conexión.";
+      permission("Sin comprobar"); notify("Datos de la prueba eliminados. El video original y tu biblioteca se conservan.");
+    } catch (error) { fail(error, "No se pudo terminar la limpieza"); }
+    finally { setBusy(false); }
+  });
+  function network() { $("network").textContent = navigator.onLine ? "El navegador indica conexión a una red." : "El navegador indica que está sin conexión."; report(); }
+  window.addEventListener("online", network);
+  window.addEventListener("offline", network);
+  window.addEventListener("pagehide", () => { if (objectURL) URL.revokeObjectURL(objectURL); });
+  window.addEventListener("pageshow", event => { if (event.persisted) { releaseVideo(); notify("Página restaurada. Pulsa «Abrir video guardado» para comprobar el acceso."); } });
+
+  async function init() {
+    network();
+    $("capability").textContent = !window.isSecureContext
+      ? "Necesitas abrir esta prueba mediante HTTPS."
+      : pickerAvailable ? "El navegador ofrece selección por referencia. Vamos a comprobar que funciona y se conserva."
+        : "Este navegador no ofrece selección por referencia. Puedes probar la reproducción temporal, pero no permitirá completar la prueba de persistencia con este método.";
+    try {
+      database = await openDatabase(); result.indexedDB = "disponible";
+      database.onversionchange = () => database.close();
+      saved = await transaction("get");
+      if (saved?.handle?.kind === "file" && typeof saved.handle.getFile === "function") {
+        result.referenciaGuardada = true;
+        result.referenciaRecuperadaAlAbrir = saved.session !== session;
+        $("filename").textContent = saved.handle.name;
+        $("reference").textContent = "Referencia recuperada al abrir esta página. Falta comprobar lectura y reproducción.";
+        if (typeof saved.handle.queryPermission === "function") permission(await saved.handle.queryPermission({ mode: "read" }));
+        else permission("API de permisos no disponible");
+      } else {
+        saved = undefined;
+        $("reference").textContent = "Sin referencia guardada";
+      }
+    } catch (error) { result.indexedDB = "falló"; $("reference").textContent = "No se pudo recuperar la referencia"; fail(error, "Falló el almacenamiento de la referencia"); }
+    try { await offlineStatus(); } catch { $("offline-state").textContent = "No se pudo comprobar la preparación sin conexión."; }
+    loaded = true; updateButtons(); report();
+  }
+  void init();
+})();
+</script>
+</body>
+</html>
