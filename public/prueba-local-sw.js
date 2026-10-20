@@ -1,6 +1,6 @@
 "use strict";
 // Solo guarda la pantalla de prueba. Nunca recibe ni almacena archivos de video.
-const CACHE = "alejandrino-local-probe-shell-v1";
+const CACHE = "alejandrino-local-probe-shell-v2";
 const PAGE = new URL("prueba-local.html", self.location.href).href;
 const MARKER = "alejandrino-local-probe-v1";
 

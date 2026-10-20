@@ -6,7 +6,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#101114">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-u9/UlWkVYUjyzdo0GoazMpfJtZkKlVEZ5lhM98Ix/zw='; style-src 'unsafe-inline'; media-src blob:; img-src data:; connect-src 'none'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Nw9zachDV8jELgKvish1qkBE1rNWjy7GWGKMguJ8Pho='; style-src 'unsafe-inline'; media-src blob:; img-src data:; connect-src 'none'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
   <title>Alejandrino · Prueba de video local</title>
   <!-- alejandrino-local-probe-v1 -->
   <style>
@@ -118,7 +118,7 @@
   const pickerAvailable = typeof window.showOpenFilePicker === "function";
   let database, saved, objectURL, busy = false, loaded = false, mode = "ninguno";
   const result = {
-    version: 1,
+    version: 2,
     origen: location.origin,
     navegador: navigator.userAgent,
     contextoSeguro: window.isSecureContext,
@@ -246,23 +246,66 @@
     displayFile(file, "temporal");
     notify("Este video solo está disponible durante esta apertura. No se ha guardado su referencia." + (saved ? " La referencia guardada anterior se conserva." : ""));
   });
-  $("reopen").addEventListener("click", async () => {
-    if (busy || !saved?.handle) return;
-    setBusy(true); clearError();
-    try {
-      const handle = saved.handle;
-      // Pide solo lectura y antes de esperar cualquier acceso a IndexedDB.
-      if (typeof handle.requestPermission === "function") {
-        const state = await handle.requestPermission({ mode: "read" });
-        permission(state);
-        if (state !== "granted") throw new DOMException("Denied", "NotAllowedError");
+  $("reopen").addEventListener("click", async function reabrir(event) {
+  if (busy || !saved?.handle) return;
+
+  const diagnostic = result.diagnosticoReapertura = {
+    version: 2,
+    clicReal: event.isTrusted,
+    paginaPrincipal: window === window.top,
+    permisoAnterior: result.permiso,
+    activacionAntesDeSolicitar: null,
+    solicitud: "no iniciada",
+    etapa: "inicio",
+    archivoObtenido: false,
+    excepcion: null
+  };
+
+  setBusy(true);
+  clearError();
+
+  try {
+    const handle = saved.handle;
+
+    if (typeof handle.requestPermission === "function") {
+      diagnostic.etapa = "requestPermission";
+      diagnostic.activacionAntesDeSolicitar =
+        navigator.userActivation?.isActive ?? null;
+      diagnostic.solicitud = "pendiente";
+
+      const state = await handle.requestPermission({ mode: "read" });
+      diagnostic.solicitud = state;
+      permission(state);
+
+      if (state !== "granted") {
+        diagnostic.etapa = "permiso no concedido";
+        result.error = "requestPermission devolvió " + state;
+        notify("El navegador respondió: " + state + ". Copia el resultado.");
+        return;
       }
-      const file = await handle.getFile();
-      displayFile(file, "referencia");
-      notify("Archivo abierto desde la referencia guardada. Pulsa reproducir.");
-    } catch (error) { fail(error, "No se pudo abrir la referencia"); }
-    finally { setBusy(false); }
-  });
+    } else {
+      diagnostic.solicitud = "API no disponible";
+    }
+
+    diagnostic.etapa = "getFile";
+    const file = await handle.getFile();
+    diagnostic.archivoObtenido = true;
+
+    diagnostic.etapa = "displayFile";
+    displayFile(file, "referencia");
+    diagnostic.etapa = "archivo abierto";
+    notify("Archivo abierto desde la referencia guardada. Pulsa reproducir.");
+  } catch (error) {
+    diagnostic.excepcion = error?.name || "Error";
+    if (diagnostic.solicitud === "pendiente") {
+      diagnostic.solicitud = "excepción";
+    }
+    fail(error, "Fallo en " + diagnostic.etapa);
+  } finally {
+    setBusy(false);
+    report();
+  }
+});
   $("player").addEventListener("playing", () => {
     result.reproduccion = true;
     if (mode === "referencia" && result.referenciaRecuperadaAlAbrir) {
