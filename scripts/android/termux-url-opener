@@ -1,0 +1,47 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Prototipo de recepción de enlaces Android en Termux para Alejandrino.
+# Instalación: cp scripts/android/termux-url-opener "$HOME/bin/termux-url-opener"
+# Nunca subir videos a Vercel o Supabase: este script guarda solo en el teléfono.
+set -u
+
+LOG="$HOME/alejandrino-descargas.log"
+RAW="${1:-}"
+
+URL="$(python - "$RAW" <<'PY'
+import re
+import sys
+from urllib.parse import urlsplit
+
+match = re.search(r"https://[^\s<>\"']+", sys.argv[1])
+if not match:
+    raise SystemExit(2)
+url = match.group(0).rstrip(".,;!?)]}")
+parsed = urlsplit(url)
+host = (parsed.hostname or "").lower()
+instagram = {"instagram.com", "www.instagram.com", "m.instagram.com"}
+tiktok = {"tiktok.com", "www.tiktok.com", "m.tiktok.com",
+          "vm.tiktok.com", "vt.tiktok.com"}
+if (parsed.scheme != "https" or parsed.username or parsed.password
+        or parsed.port or host not in instagram | tiktok):
+    raise SystemExit(2)
+print(url)
+PY
+)" || {
+  printf '%s\n' "Enlace no compatible: ${RAW}" >> "$LOG"
+  exit 2
+}
+
+DEST="$HOME/storage/downloads/Alejandrino"
+mkdir -p "$DEST" || exit 1
+
+{
+  printf '\n[%s] Compartido: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$URL"
+  yt-dlp --no-playlist --no-overwrites --no-mtime \
+    -f 'bv[height<=1080]+ba/b[height<=1080]' \
+    --merge-output-format mp4 \
+    -o "$DEST/%(extractor)s-%(id)s.%(ext)s" \
+    "$URL"
+  RESULT=$?
+  printf '[%s] Estado: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$RESULT"
+} >> "$LOG" 2>&1
+exit "$RESULT"
