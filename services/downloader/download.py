@@ -42,11 +42,11 @@ def identify_platform(source_url: str) -> str:
     raise ValueError("Solo se admiten publicaciones/reels de Instagram o videos de TikTok.")
 
 
-def download_video(source_url: str, output: Path, *, max_height: int = 1080,
+def download_video(source_url: str, output: Path, *, target_resolution: int = 720,
                    technique_id: str | None = None) -> dict:
     platform = identify_platform(source_url)
-    if max_height not in {720, 1080}:
-        raise ValueError("max_height debe ser 720 o 1080.")
+    if target_resolution not in {720, 1080}:
+        raise ValueError("target_resolution debe ser 720 o 1080.")
     if technique_id is not None:
         technique_id = str(UUID(technique_id))
 
@@ -61,9 +61,10 @@ def download_video(source_url: str, output: Path, *, max_height: int = 1080,
     job_dir.mkdir()
 
     options = {
-        # Primero el mejor video dentro del límite + audio independiente.
-        # Fallback para MP4 progresivo que ya trae audio.
-        "format": f"bv[height<={max_height}]+ba/b[height<={max_height}]/bv+ba/b",
+        # 'res' usa la dimensión menor: 720x1280 se considera 720p.
+        # La fuente puede ofrecer solo opciones menores (o mayores).
+        "format": "bv+ba/b",
+        "format_sort": [f"res:{target_resolution}"],
         "merge_output_format": "mp4",
         "outtmpl": str(job_dir / "%(extractor_key)s-%(id)s.%(ext)s"),
         "noplaylist": True,
@@ -109,14 +110,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Descarga local de Alejandrino (yt-dlp)")
     parser.add_argument("url", help="URL de un reel/publicación o TikTok")
     parser.add_argument("--output", default="./downloads", help="Directorio local")
-    parser.add_argument("--max-height", type=int, choices=[720, 1080], default=1080)
+    parser.add_argument("--resolution", "--max-height", dest="resolution",
+                        type=int, choices=[720, 1080], default=720)
     parser.add_argument("--technique-id", help="UUID de una ficha existente (opcional)")
     args = parser.parse_args()
 
     try:
         result = download_video(
             args.url, Path(args.output),
-            max_height=args.max_height,
+            target_resolution=args.resolution,
             technique_id=args.technique_id
         )
     except Exception as error:
