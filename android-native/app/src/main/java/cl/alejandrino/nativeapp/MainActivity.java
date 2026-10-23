@@ -16,7 +16,6 @@ import com.chaquo.python.PyObject;
 import com.arthenica.ffmpegkit.FFmpegKit;
 import com.arthenica.ffmpegkit.ReturnCode;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -82,25 +81,24 @@ public final class MainActivity extends Activity {
                 PyObject module = Python.getInstance().getModule("extractor");
                 JSONObject result = new JSONObject(module.callAttr("extract", url,
                     taskDir.getAbsolutePath()).toString());
-                JSONArray paths = result.getJSONArray("paths");
-                if (paths.length() < 1 || paths.length() > 2)
-                    throw new Exception("Se esperaban una o dos pistas.");
-
+                String videoPath = result.getString("video_path");
+                String audioPath = result.optString("audio_path", "");
                 File merged = new File(taskDir, "final.mp4");
-                if (paths.length() == 2) {
+                if (!audioPath.isEmpty()) {
                     show("Uniendo audio y video…");
                     String[] command = {
-                        "-y", "-i", paths.getString(0), "-i", paths.getString(1),
+                        "-y", "-i", videoPath, "-i", audioPath,
                         "-map", "0:v:0", "-map", "1:a:0", "-c", "copy",
                         "-movflags", "+faststart", merged.getAbsolutePath()
                     };
                     var session = FFmpegKit.executeWithArguments(command);
                     if (!ReturnCode.isSuccess(session.getReturnCode())) {
-                        throw new Exception("FFmpeg no pudo unir las pistas.");
+                        throw new Exception("FFmpeg no pudo unir las pistas. Código: "
+                            + session.getReturnCode());
                     }
                 } else {
-                    File original = new File(paths.getString(0));
-                    // Filesystem.renameTo can fail across filesystems; copy instead.
+                    // Una pista progresiva puede traer video y audio combinados.
+                    File original = new File(videoPath);
                     try (FileInputStream in = new FileInputStream(original);
                          java.io.FileOutputStream out = new java.io.FileOutputStream(merged)) {
                         in.transferTo(out);
