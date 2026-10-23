@@ -2,6 +2,7 @@
 # Prototipo de recepción de enlaces Android en Termux para Alejandrino.
 # Instalación: cp scripts/android/termux-url-opener "$HOME/bin/termux-url-opener"
 # Nunca subir videos a Vercel o Supabase: este script guarda solo en el teléfono.
+# Prioridad: 720p (res:720 usa el lado menor en video vertical); sin recodificar.
 set -u
 
 LOG="$HOME/alejandrino-descargas.log"
@@ -37,9 +38,9 @@ mkdir -p "$DEST" || exit 1
 {
   printf '\n[%s] Compartido: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$URL"
   yt-dlp --no-playlist --no-overwrites --no-mtime \
-    -f 'bv[height<=1080]+ba/b[height<=1080]' \
+    -S 'res:720' -f 'bv+ba/b' \
     --merge-output-format mp4 \
-    -o "$DEST/%(extractor)s-%(id)s.%(ext)s" \
+    -o "$DEST/%(extractor)s-%(id)s-%(resolution)s.%(ext)s" \
     "$URL"
   RESULT=$?
   printf '[%s] Estado: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$RESULT"
