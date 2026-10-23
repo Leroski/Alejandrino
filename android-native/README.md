@@ -40,3 +40,23 @@ La app debe recibir un enlace HTTPS público propio o autorizado.
 APK que compila, se instala en Galaxy A07, aparece en Compartir,
 descarga un Instagram autorizado a 720p cuando esté disponible, y entrega
 un MP4 con audio reproducible. Repetir con TikTok autorizado.
+
+## Incidencia observada y corrección (23 octubre 2026)
+
+La primera APK se compiló e instaló en el Galaxy A07. Tras compartir un reel,
+yt-dlp lanzó `You have requested merging of multiple formats but ffmpeg is not installed`.
+Esto ocurrió porque el motor Python pedía `bv+ba` y luego intentaba unirlos
+internamente. La versión actual primero resuelve formatos con
+`extract_info(download=False)`, descarga cada pista por separado a un archivo
+temporal, y retorna rutas `video_path` / `audio_path`. La capa Java combina
+ambas pistas con la biblioteca FFmpegKit ya empaquetada.
+
+**Estado:** corrección pendiente de verificar tras recompilar en Android Studio.
+No implica instalar ffmpeg en Termux. La unión no recodifica las pistas.
+
+### Probar después del cambio
+
+Desde Ubuntu: `git fetch origin && git switch feat/android-apk-spike && git pull --ff-only`.
+En Android Studio sincroniza Gradle, pulsa Run e intenta Compartir → Alejandrino
+con el mismo reel público. El resultado esperado es un MP4 con audio en
+`Download/Alejandrino`. Si falla, copiar el nuevo mensaje de la pantalla o Logcat.
