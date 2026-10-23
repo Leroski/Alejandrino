@@ -1,6 +1,6 @@
 # Prototipo Android: compartir a Termux
 
-Estado: **experimental, requiere validación en el teléfono**. No sustituye a
+Estado: **probado desde Compartir de Instagram a Termux en un Galaxy A07**. No sustituye a
 Alejandrino ni sincroniza automáticamente archivos con sus fichas Supabase.
 
 Este paso utiliza la función nativa de Termux `~/bin/termux-url-opener`:
@@ -35,7 +35,7 @@ En Termux:
 tail -n 25 ~/alejandrino-descargas.log
 ```
 
-En Instagram: Compartir → Termux. Consultar los videos en
+En Instagram: Compartir → Termux. El script prioriza 720p (`-S 'res:720'`) y nombra la salida con la resolución para evitar reutilizar la copia previa de 540p. Consultar los videos en
 `Download/Alejandrino` y el registro `~/alejandrino-descargas.log`.
 
 Se requiere Python, yt-dlp, FFmpeg, permisos de almacenamiento y un Termux
