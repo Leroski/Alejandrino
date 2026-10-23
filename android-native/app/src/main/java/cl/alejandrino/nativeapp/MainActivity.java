@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.Gravity;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -24,6 +25,7 @@ import java.io.OutputStream;
 import java.util.UUID;
 
 public final class MainActivity extends Activity {
+    private static final String TAG = "AlejandrinoNative";
     private TextView status;
     private volatile boolean busy = false;
 
@@ -91,7 +93,9 @@ public final class MainActivity extends Activity {
                         "-map", "0:v:0", "-map", "1:a:0", "-c", "copy",
                         "-movflags", "+faststart", merged.getAbsolutePath()
                     };
+                    Log.i(TAG, "Iniciando FFmpegKit para combinar pistas descargadas");
                     var session = FFmpegKit.executeWithArguments(command);
+                    Log.i(TAG, "FFmpegKit terminó con código: " + session.getReturnCode());
                     if (!ReturnCode.isSuccess(session.getReturnCode())) {
                         throw new Exception("FFmpeg no pudo unir las pistas. Código: "
                             + session.getReturnCode());
@@ -131,8 +135,9 @@ public final class MainActivity extends Activity {
                 values.put(MediaStore.Downloads.IS_PENDING, 0);
                 getContentResolver().update(destination, values, null, null);
                 show("Descarga lista en Download/Alejandrino.");
-            } catch (Exception error) {
-                show("Error: " + error.getMessage());
+            } catch (Exception | LinkageError error) {
+                Log.e(TAG, "Descarga/mezcla Android fallida", error);
+                show("Error: " + error.getClass().getSimpleName() + ": " + error.getMessage());
             } finally {
                 busy = false;
                 File[] files = taskDir.listFiles();
