@@ -44,4 +44,7 @@ dependencies {
     // 8.1.9 corrige el cierre de la variante min por libc++_shared.so faltante.
     // FFmpeg queda dentro de la APK: no depende de Termux ni de servicios de descarga.
     implementation 'dev.ffmpegkit-maintained:ffmpeg-kit-min:8.1.9'
+    // El A07 falló con NoClassDefFoundError: com.arthenica.smartexception.java.Exceptions.
+    // Declararla explícitamente asegura su inclusión en el APK.
+    implementation 'com.arthenica:smart-exception-java:0.2.1'
 }
