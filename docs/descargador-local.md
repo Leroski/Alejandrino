@@ -22,7 +22,7 @@ python3 -m venv .venv-downloader
 .venv-downloader/bin/python -m unittest discover -s tests -p 'downloader.test.py' -v
 .venv-downloader/bin/python services/downloader/download.py \
   'https://www.instagram.com/p/Deq5Cdis7Jd/' \
-  --max-height 1080 \
+  --resolution 720 \
   --output ./downloads
 ```
 
@@ -32,7 +32,7 @@ puede fallar si el contenido no es accesible o si la plataforma cambia.
 
 ## Contrato del módulo
 
-Entrada: `url`, `max_height` (720 o 1080), `output` y `technique_id` opcional
+Entrada: `url`, `resolution` (720 o 1080, 720 predeterminado), `output` y `technique_id` opcional
 (UUID de la ficha almacenada en Supabase).
 
 Salida JSON con `status`, `source_url`, `platform`, `technique_id`,
@@ -60,3 +60,7 @@ el motor; nunca debe interpretarse como una ruta transferible a otro dispositivo
   autorizado o cuya descarga esté permitida.
 
 No modifica el flujo Compartir, la tabla `techniques` ni el guardado de enlaces.
+
+## Selección de calidad
+
+Se utiliza `format_sort: ['res:720']` junto con `bv+ba/b`. `res` interpreta la dimensión menor del video: 720 × 1280 corresponde a 720p, aunque su altura sea 1280. Esto **prioriza** 720p, no impone un límite estricto: si no está disponible, yt-dlp puede elegir otro tamaño. No recodifica las pistas.
