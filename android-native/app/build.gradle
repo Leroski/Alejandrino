@@ -41,6 +41,7 @@ chaquopy {
 
 dependencies {
     // LGPL-3.0: revisar obligaciones de distribución antes de publicar.
+    // 8.1.9 corrige el cierre de la variante min por libc++_shared.so faltante.
     // FFmpeg queda dentro de la APK: no depende de Termux ni de servicios de descarga.
-    implementation 'dev.ffmpegkit-maintained:ffmpeg-kit-min:8.1.7'
+    implementation 'dev.ffmpegkit-maintained:ffmpeg-kit-min:8.1.9'
 }
