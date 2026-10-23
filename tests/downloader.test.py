@@ -30,8 +30,8 @@ class SharedURLTests(unittest.TestCase):
                 downloader.identify_platform(url)
 
     def test_invalid_height_precedes_import(self):
-        with self.assertRaisesRegex(ValueError, "max_height"):
-            downloader.download_video("https://www.instagram.com/p/abc/", Path("/tmp/unused"), max_height=480)
+        with self.assertRaisesRegex(ValueError, "target_resolution"):
+            downloader.download_video("https://www.instagram.com/p/abc/", Path("/tmp/unused"), target_resolution=480)
 
 
 if __name__ == "__main__":
