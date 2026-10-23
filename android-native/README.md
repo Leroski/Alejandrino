@@ -83,3 +83,9 @@ Con esa terminal abierta, compartir un reel hacia Alejandrino.
 Si la app vuelve a cerrarse, copiar el error fatal. Para registrar eventos
 de éxito además de errores, cambiar `AlejandrinoNative:E` por
 `AlejandrinoNative:V`.
+
+## Fallo confirmado con Logcat: clase Java ausente
+
+Logcat mostró `java.lang.NoClassDefFoundError: com.arthenica.smartexception.java.Exceptions` en `FFmpegKitConfig.<clinit>` durante la unión de pistas. Se añadió explícitamente `com.arthenica:smart-exception-java:0.2.1` a `app/build.gradle`, manteniendo FFmpegKit `8.1.9`.
+
+Volver a sincronizar Gradle, ejecutar Run e intentar compartir un reel. Si se cierra, repetir `adb logcat -v time -s AlejandrinoNative:V AndroidRuntime:E linker:E DEBUG:E` y comprobar el siguiente error; no asumir que esta dependencia resuelve otros posibles fallos nativos.
