@@ -60,3 +60,26 @@ Desde Ubuntu: `git fetch origin && git switch feat/android-apk-spike && git pull
 En Android Studio sincroniza Gradle, pulsa Run e intenta Compartir → Alejandrino
 con el mismo reel público. El resultado esperado es un MP4 con audio en
 `Download/Alejandrino`. Si falla, copiar el nuevo mensaje de la pantalla o Logcat.
+
+## Diagnóstico de cierre en la unión (23 octubre 2026)
+
+En el Galaxy A07 la versión con FFmpegKit min 8.1.7 mostró «Uniendo audio y
+video…» y luego se cerró sin guardar archivo. La versión 8.1.7 `min`
+tenía un defecto conocido de empaquetado de `libc++_shared.so`, solucionado
+en la versión 8.1.9. Por ello se actualizó esa dependencia y se incorporaron
+logs Android con tag `AlejandrinoNative`, además de captura de `LinkageError`.
+
+**Pendiente de validar en dispositivo**: que la actualización elimine el crash,
+que FFmpegKit consiga unir pistas y que MediaStore entregue un archivo MP4.
+
+Prueba tras actualizar Git y reinstalar mediante Run:
+
+```bash
+adb logcat -c
+adb logcat -v time -s AlejandrinoNative:E AndroidRuntime:E linker:E DEBUG:E
+```
+
+Con esa terminal abierta, compartir un reel hacia Alejandrino.
+Si la app vuelve a cerrarse, copiar el error fatal. Para registrar eventos
+de éxito además de errores, cambiar `AlejandrinoNative:E` por
+`AlejandrinoNative:V`.
