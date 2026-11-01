@@ -12,13 +12,13 @@ android {
         minSdk 29
         targetSdk 35
         versionCode 1
-        versionName '0.1.0'
+        versionName '0.2.0'\n        buildConfigField 'String', 'ALEJANDRINO_WEB_URL', '\"' + (project.findProperty('ALEJANDRINO_WEB_URL') ?: '') + '\"'
         ndk {
             abiFilters 'arm64-v8a'
         }
     }
 
-    buildTypes {
+    buildFeatures {\n        buildConfig true\n    }\n\n    buildTypes {
         release {
             minifyEnabled false
         }
@@ -39,7 +39,7 @@ chaquopy {
     }
 }
 
-dependencies {
+dependencies {\n    implementation 'androidx.webkit:webkit:1.14.0'
     // LGPL-3.0: revisar obligaciones de distribución antes de publicar.
     // 8.1.9 corrige el cierre de la variante min por libc++_shared.so faltante.
     // FFmpeg queda dentro de la APK: no depende de Termux ni de servicios de descarga.
