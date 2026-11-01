@@ -29,13 +29,11 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
   const [draft, setDraft] = useState<Technique | null>(null);
   const [error, setError] = useState("");
   const [brokenThumbnail, setBrokenThumbnail] = useState("");
-  const [native, setNative] = useState(false);
   const [localStatus, setLocalStatus] = useState<"missing" | "downloading" | "merging" | "available">("missing");
   const [nativeNotice, setNativeNotice] = useState("");
 
   useEffect(() => {
     if (!isNativeAndroid()) return;
-    setNative(true);
     const unsubscribe = subscribeNative(result => {
       if (result.techniqueId !== technique.id) return;
       if (result.status) setLocalStatus(result.status);
@@ -95,7 +93,7 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
         </button>}
       <p className="mt-1 truncate text-sm text-zinc-400" title={technique.url}>{technique.url}</p>
       {labels.length > 0 && <p className="mt-3 break-words text-sm text-zinc-300">{labels.join(" · ")}</p>}
-      {native && (
+      {isNativeAndroid() && (
         <div className="mt-3 grid gap-2">
           <p role="status" className="text-sm text-zinc-300">
             {localStatus === "available" ? "Disponible en este dispositivo" :
