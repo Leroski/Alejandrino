@@ -105,7 +105,7 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (web != null) navigateShared(intent);
+        if (web != null && allowedOrigin != null) navigateShared(intent);
     }
 
     private void navigateShared(Intent intent) {
@@ -185,7 +185,7 @@ public final class MainActivity extends Activity {
                 JSONObject extracted = new JSONObject(module.callAttr("extract", url,
                     jobDir.getAbsolutePath()).toString());
                 String video = extracted.getString("video_path");
-                String audio = extracted.optString("audio_path", "");
+                String audio = extracted.isNull("audio_path") ? "" : extracted.optString("audio_path", "");
                 File merged = new File(jobDir, "final.mp4");
                 if (!audio.isEmpty()) {
                     emit("STATUS", id, "merging", "Uniendo audio y video…");
