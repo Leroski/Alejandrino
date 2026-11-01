@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import AuthGate from "../components/AuthGate";
-import { addTechnique, draftFromText } from "../lib/techniques";
+import { addTechnique, draftFromText, findExistingTechnique } from "../lib/techniques";
 import { sharedLink } from "../lib/shared-link";
 import { errorMessage } from "../lib/supabase";
 import { requestVideoMetadata } from "../lib/video-metadata";
@@ -41,18 +41,15 @@ function SaveSharedLink({ initialUrl, user }: { initialUrl: string; user: User }
       // Duplicados: consulta la ficha existente sin crear otra ni modificarla.
       let confirmed = item;
       if (!confirmed && isNativeAndroid()) {
-        const { getSupabase } = await import("../lib/supabase");
-        const { extractUrl } = await import("../lib/techniques");
-        const { data, error: lookupError } = await getSupabase().from("techniques")
-          .select("*").eq("user_id", user.id).eq("url", extractUrl(url)).maybeSingle();
-        if (lookupError) throw lookupError;
-        confirmed = data;
+        confirmed = await findExistingTechnique(user.id, url);
       }
       setNotice(item ? "Guardado en tu biblioteca." : "Este enlace ya estaba guardado.");
       if (confirmed && isNativeAndroid()) {
         setDownloadNotice("Descargando video en este dispositivo…");
-        sendNative({ type: "DOWNLOAD", userId: user.id,
-          techniqueId: confirmed.id, url: confirmed.url });
+        if (!sendNative({ type: "DOWNLOAD", userId: user.id,
+          techniqueId: confirmed.id, url: confirmed.url })) {
+          setDownloadNotice("No se encontró el puente Android. Actualiza la APK y la web.");
+        }
       }
     } catch (cause) {
       setError(errorMessage(cause));
