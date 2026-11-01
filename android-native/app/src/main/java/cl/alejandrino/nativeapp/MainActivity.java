@@ -74,6 +74,7 @@ public final class MainActivity extends Activity {
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        Log.i(TAG, "Origen web configurado: " + allowedOrigin);
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
@@ -128,9 +129,13 @@ public final class MainActivity extends Activity {
         try {
             JSONObject m = new JSONObject(raw);
             String type = m.optString("type", "");
+            Log.i(TAG, "Puente recibido: " + type);
             String user = m.optString("userId", "");
             String id = m.optString("techniqueId", "");
-            if (!UUID_PATTERN.matcher(user).matches() || !UUID_PATTERN.matcher(id).matches()) return;
+            if (!UUID_PATTERN.matcher(user).matches() || !UUID_PATTERN.matcher(id).matches()) {
+                Log.w(TAG, "Puente rechazado por identificadores inválidos: " + type);
+                return;
+            }
             if (type.equals("CHECK")) {
                 emit("AVAILABILITY", id, files.find(user, id) != null ? "available" : "missing", "");
             } else if (type.equals("OPEN")) {
@@ -140,7 +145,11 @@ public final class MainActivity extends Activity {
                 });
             } else if (type.equals("DOWNLOAD")) {
                 String url = m.optString("url", "");
-                if (url.length() > 2048 || !url.startsWith("https://")) return;
+                if (url.length() > 2048 || !url.startsWith("https://")) {
+                    Log.w(TAG, "Descarga rechazada: URL inválida");
+                    emit("ERROR", id, "missing", "URL de descarga no válida.");
+                    return;
+                }
                 download(user, id, url);
             }
         } catch (Exception error) {
