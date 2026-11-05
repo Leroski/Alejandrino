@@ -44,6 +44,11 @@ def extract(url, directory):
         "quiet": True,
         "noprogress": True,
         "overwrites": False,
+        # Avoid silently waiting indefinitely for an unavailable source.
+        "socket_timeout": 20,
+        "retries": 2,
+        "fragment_retries": 2,
+        "extractor_retries": 2,
     }
 
     # download=False resuelve los formatos sin usar FFmpeg.
