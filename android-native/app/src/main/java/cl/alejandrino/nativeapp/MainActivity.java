@@ -42,6 +42,8 @@ public final class MainActivity extends Activity {
     private WebView web;
     private NativeFileIndex files;
     private volatile boolean busy = false;
+    private volatile String activeTechniqueId = "";
+    private volatile String activeStage = "missing";
     private String baseUrl;
     private String allowedOrigin;
 
@@ -196,7 +198,11 @@ public final class MainActivity extends Activity {
                 return;
             }
             if (type.equals("CHECK")) {
-                emit("AVAILABILITY", id, files.find(user, id) != null ? "available" : "missing", "");
+                if (busy && id.equals(activeTechniqueId)) {
+                    emit("STATUS", id, activeStage, "Descarga en curso…");
+                } else {
+                    emit("AVAILABILITY", id, files.find(user, id) != null ? "available" : "missing", "");
+                }
             } else if (type.equals("OPEN")) {
                 runOnUiThread(() -> {
                     try { files.open(user, id); }
@@ -245,6 +251,9 @@ public final class MainActivity extends Activity {
             return;
         }
         busy = true;
+        activeTechniqueId = id;
+        activeStage = "downloading";
+        Log.i(TAG, "Inicio descarga id=" + id + " URL=" + url);
         emit("STATUS", id, "downloading", "Descargando video…");
         new Thread(() -> {
             File jobDir = new File(getCacheDir(), "job-" + UUID.randomUUID());
@@ -252,17 +261,21 @@ public final class MainActivity extends Activity {
                 PyObject module = Python.getInstance().getModule("extractor");
                 JSONObject extracted = new JSONObject(module.callAttr("extract", url,
                     jobDir.getAbsolutePath()).toString());
+                Log.i(TAG, "Extracción terminada id=" + id);
                 String video = extracted.getString("video_path");
                 String audio = extracted.isNull("audio_path") ? "" : extracted.optString("audio_path", "");
                 File merged = new File(jobDir, "final.mp4");
                 if (!audio.isEmpty()) {
+                    activeStage = "merging";
                     emit("STATUS", id, "merging", "Uniendo audio y video…");
+                    Log.i(TAG, "Iniciando FFmpegKit id=" + id);
                     String[] command = {
                         "-y", "-i", video, "-i", audio, "-map", "0:v:0",
                         "-map", "1:a:0", "-c", "copy", "-movflags", "+faststart",
                         merged.getAbsolutePath()
                     };
                     var session = FFmpegKit.executeWithArguments(command);
+                    Log.i(TAG, "FFmpegKit terminó id=" + id + " código=" + session.getReturnCode());
                     if (!ReturnCode.isSuccess(session.getReturnCode())) {
                         throw new Exception("FFmpegKit falló: " + session.getReturnCode());
                     }
@@ -273,7 +286,9 @@ public final class MainActivity extends Activity {
                     }
                 }
                 if (!merged.isFile() || merged.length() == 0) throw new Exception("Archivo de salida vacío");
+                Log.i(TAG, "Guardando MP4 id=" + id + " bytes=" + merged.length());
                 files.store(user, id, merged);
+                Log.i(TAG, "MP4 guardado y vinculado id=" + id);
                 emit("STATUS", id, "available", "Video descargado y vinculado a tu ficha.");
             } catch (Exception | LinkageError error) {
                 Log.e(TAG, "Fallo durante descarga local", error);
@@ -283,6 +298,8 @@ public final class MainActivity extends Activity {
                 if (parts != null) for (File part : parts) part.delete();
                 jobDir.delete();
                 busy = false;
+                activeTechniqueId = "";
+                activeStage = "missing";
             }
         }).start();
     }
