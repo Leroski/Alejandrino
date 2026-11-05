@@ -174,7 +174,8 @@ public final class MainActivity extends Activity {
                     host.equals("youtube.com") || host.endsWith(".youtube.com") ||
                     host.equals("youtu.be");
                 if (!"https".equals(uri.getScheme()) || !allowedHost ||
-                    uri.getUserInfo() != null || videoUrl.length() > 2048) {
+                    (uri.getEncodedAuthority() != null && uri.getEncodedAuthority().contains("@")) ||
+                    videoUrl.length() > 2048) {
                     Log.w(TAG, "Enlace externo rechazado: URL o dominio no admitidos");
                     return;
                 }
