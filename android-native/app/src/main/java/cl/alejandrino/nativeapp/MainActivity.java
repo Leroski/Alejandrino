@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.ViewGroup;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceError;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -76,14 +77,41 @@ public final class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         Log.i(TAG, "Origen web configurado: " + allowedOrigin);
         web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
+                Log.i(TAG, "WebView inició navegación: " + url);
+            }
+            @Override public void onPageFinished(WebView view, String url) {
+                Log.i(TAG, "WebView cargó: " + url);
+                if (url.startsWith(allowedOrigin + "/")) {
+                    view.evaluateJavascript("typeof window.AlejandrinoBridge", result ->
+                        Log.i(TAG, "Puente JS en origen autorizado: " + result));
+                } else {
+                    Log.w(TAG, "La WebView terminó en otro origen; puente nativo deshabilitado");
+                }
+            }
+            @Override public void onReceivedError(WebView view, WebResourceRequest request,
+                                                   WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    Log.e(TAG, "Error de página WebView: " + request.getUrl() +
+                        " (" + error.getErrorCode() + ") " + error.getDescription());
+                }
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
+                if (!request.isForMainFrame()) return false;
                 String origin = uri.getScheme() + "://" + uri.getAuthority();
+                Log.i(TAG, "Navegación de página principal: " + uri);
                 if (allowedOrigin.equals(origin)) return false;
-                if (request.isForMainFrame()) {
-                    try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
-                    catch (Exception error) { Log.e(TAG, "No se pudo abrir enlace externo", error); }
-                }
+                // A redirect may point to another Vercel host. NEVER silently open
+                // the main app in Chrome, because this hides the native controls.
+                Log.e(TAG, "WebView bloqueó cambio de origen: " + origin +
+                    " (permitido: " + allowedOrigin + ")");
+                TextView warning = new TextView(MainActivity.this);
+                warning.setPadding(32, 64, 32, 32);
+                warning.setText("Alejandrino intentó abrir otro dominio:\\n" + origin +
+                    "\\n\\nDominio autorizado:\\n" + allowedOrigin +
+                    "\\n\\nComprueba la URL de Vercel configurada en Gradle.");
+                setContentView(warning);
                 return true;
             }
         });
