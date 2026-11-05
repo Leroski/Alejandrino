@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { isNativeAndroid, sendNative, subscribeNative } from "../lib/native-bridge";
+import { sendNative, subscribeNative, useNativeAndroid } from "../lib/native-bridge";
 import { cleanField, isPending, type Technique } from "../types/technique";
 
 import { metadataMessage, safeThumbnail, type VideoMetadata } from "../types/video-metadata";
@@ -29,11 +29,12 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
   const [draft, setDraft] = useState<Technique | null>(null);
   const [error, setError] = useState("");
   const [brokenThumbnail, setBrokenThumbnail] = useState("");
+  const native = useNativeAndroid();
   const [localStatus, setLocalStatus] = useState<"missing" | "downloading" | "merging" | "available">("missing");
   const [nativeNotice, setNativeNotice] = useState("");
 
   useEffect(() => {
-    if (!isNativeAndroid()) return;
+    if (!native) return;
     const unsubscribe = subscribeNative(result => {
       if (result.techniqueId !== technique.id) return;
       if (result.status) setLocalStatus(result.status);
@@ -42,7 +43,7 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
     });
     sendNative({ type: "CHECK", userId: technique.user_id, techniqueId: technique.id });
     return unsubscribe;
-  }, [technique.id, technique.user_id]);
+  }, [native, technique.id, technique.user_id]);
   const thumbnail = safeThumbnail(metadata?.thumbnail_url);
   const previewMessage = metadataBusy ? "Buscando información del video…" : metadataMessage(metadata);
   const pending = isPending(technique);
@@ -93,7 +94,7 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
         </button>}
       <p className="mt-1 truncate text-sm text-zinc-400" title={technique.url}>{technique.url}</p>
       {labels.length > 0 && <p className="mt-3 break-words text-sm text-zinc-300">{labels.join(" · ")}</p>}
-      {isNativeAndroid() && (
+      {native && (
         <div className="mt-3 grid gap-2">
           <p role="status" className="text-sm text-zinc-300">
             {localStatus === "available" ? "Disponible en este dispositivo" :
