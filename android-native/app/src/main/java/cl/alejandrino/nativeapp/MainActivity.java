@@ -102,6 +102,12 @@ public final class MainActivity extends Activity {
                 String origin = uri.getScheme() + "://" + uri.getAuthority();
                 Log.i(TAG, "Navegación de página principal: " + uri);
                 if (allowedOrigin.equals(origin)) return false;
+                if (request.hasGesture() && "https".equals(uri.getScheme())) {
+                    Log.i(TAG, "Abriendo navegación externa solicitada por usuario: " + origin);
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
+                    catch (Exception error) { Log.e(TAG, "No se pudo abrir el enlace", error); }
+                    return true;
+                }
                 // A redirect may point to another Vercel host. NEVER silently open
                 // the main app in Chrome, because this hides the native controls.
                 Log.e(TAG, "WebView bloqueó cambio de origen: " + origin +
@@ -158,6 +164,30 @@ public final class MainActivity extends Activity {
             JSONObject m = new JSONObject(raw);
             String type = m.optString("type", "");
             Log.i(TAG, "Puente recibido: " + type);
+            if ("OPEN_EXTERNAL".equals(type)) {
+                String videoUrl = m.optString("url", "");
+                Uri uri = Uri.parse(videoUrl);
+                String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(java.util.Locale.ROOT);
+                boolean allowedHost =
+                    host.equals("instagram.com") || host.endsWith(".instagram.com") ||
+                    host.equals("tiktok.com") || host.endsWith(".tiktok.com") ||
+                    host.equals("youtube.com") || host.endsWith(".youtube.com") ||
+                    host.equals("youtu.be");
+                if (!"https".equals(uri.getScheme()) || !allowedHost ||
+                    uri.getUserInfo() != null || videoUrl.length() > 2048) {
+                    Log.w(TAG, "Enlace externo rechazado: URL o dominio no admitidos");
+                    return;
+                }
+                runOnUiThread(() -> {
+                    try {
+                        Intent external = new Intent(Intent.ACTION_VIEW, uri);
+                        startActivity(external);
+                    } catch (Exception error) {
+                        Log.e(TAG, "No se pudo abrir el video original", error);
+                    }
+                });
+                return;
+            }
             String user = m.optString("userId", "");
             String id = m.optString("techniqueId", "");
             if (!UUID_PATTERN.matcher(user).matches() || !UUID_PATTERN.matcher(id).matches()) {
