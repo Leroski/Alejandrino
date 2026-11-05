@@ -2,13 +2,9 @@
 
 import { useSyncExternalStore } from "react";
 
-type NativeMessage = {
-  id?: string;
-  type: "DOWNLOAD" | "CHECK" | "OPEN";
-  userId: string;
-  techniqueId: string;
-  url?: string;
-};
+type NativeMessage =
+  | { type: "DOWNLOAD" | "CHECK" | "OPEN"; userId: string; techniqueId: string; url?: string }
+  | { type: "OPEN_EXTERNAL"; url: string };
 export type NativeResponse = {
   id?: string;
   type: "STATUS" | "AVAILABILITY" | "ERROR";
