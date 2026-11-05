@@ -1,5 +1,7 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+
 type NativeMessage = {
   id?: string;
   type: "DOWNLOAD" | "CHECK" | "OPEN";
@@ -26,6 +28,13 @@ const eventName = "alejandrino:native";
 
 export function isNativeAndroid(): boolean {
   return typeof window !== "undefined" && !!window.AlejandrinoBridge;
+}
+
+// During Next.js SSR and hydration, the bridge must initially be absent on
+// both sides. React then reads the browser snapshot and reveals Android controls.
+const noOpSubscribe = () => () => {};
+export function useNativeAndroid(): boolean {
+  return useSyncExternalStore(noOpSubscribe, isNativeAndroid, () => false);
 }
 
 export function sendNative(message: NativeMessage): boolean {
