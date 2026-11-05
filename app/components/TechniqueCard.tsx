@@ -123,8 +123,18 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
         </div>
       )}
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <a href={technique.url} target="_blank" rel="noopener noreferrer"
-          className={`${button} bg-red-600 text-center text-white hover:bg-red-500`}>Ver video</a>
+        {native ? (
+          <button type="button"
+            onClick={() => sendNative({ type: "OPEN_EXTERNAL", url: technique.url })}
+            className={`${button} bg-red-600 text-center text-white hover:bg-red-500`}>
+            Ver video
+          </button>
+        ) : (
+          <a href={technique.url} target="_blank" rel="noopener noreferrer"
+            className={`${button} bg-red-600 text-center text-white hover:bg-red-500`}>
+            Ver video
+          </a>
+        )}
         <button type="button" disabled={disabled} aria-expanded={!!draft} aria-controls={`edit-${technique.id}`}
           className={`${button} bg-zinc-800 hover:bg-zinc-700`}
           onClick={() => { setError(""); setDraft(draft ? null : technique); }}>
