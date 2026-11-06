@@ -1,63 +1,80 @@
 # Alejandrino
 
-Biblioteca personal de técnicas de grappling, pensada principalmente para
-usarse desde el teléfono Android.
+Biblioteca personal de técnicas de judo y BJJ: guardar enlaces desde el teléfono,
+encontrarlos después y clasificarlos por disciplina, posición y categoría.
 
-## Funciones actuales
+## Funciones implementadas
 
-- Guardar rápidamente enlaces de TikTok, Instagram y YouTube.
-- Clasificar las técnicas después de guardarlas.
-- Editar nombre, disciplina, posición y categoría.
-- Buscar técnicas y filtrar las pendientes de clasificación.
-- Detectar enlaces repetidos.
-- Eliminar técnicas.
-- Conservar la biblioteca en el navegador mediante localStorage.
+- Inicio de sesión y biblioteca sincronizada mediante Supabase.
+- Guardado de enlaces de Instagram, TikTok y YouTube, edición y búsqueda.
+- Detección de enlaces repetidos e importación de la biblioteca local anterior.
+- Recepción de enlaces compartidos desde Android.
+- Metadatos de TikTok y YouTube mediante oEmbed, sin ejecutar el HTML recibido.
+- APK de prueba CHECK: consulta si una ficha tiene un archivo local después de
+  verificar la sesión y la propiedad de la ficha.
 
-La aplicación guarda enlaces, no descarga los videos.
+**Estado:** proyecto en desarrollo. La APK CHECK se instala como
+**Alejandrino prueba** y tiene un índice separado de las APK experimentales.
+En una instalación limpia se espera «No descargado en este dispositivo».
+La descarga y reproducción integrada, la importación del índice y el recorrido
+completo en Galaxy A07 siguen pendientes. Los prototipos de descarga se
+conservan en ramas experimentales; no son una versión de producción.
 
 ## Desarrollo local
 
-Instalar las dependencias:
+Requiere Node.js 24 y un proyecto Supabase propio.
 
 ```bash
-npm install
+npm ci
+cp .env.example .env.local
 ```
 
-Iniciar el servidor:
+Completar la URL del proyecto y su clave **Publishable** en `.env.local`.
+No usar una clave secreta ni `service_role`. En un proyecto nuevo, revisar y
+aplicar `supabase/01-library.sql` y luego `supabase/02-video-metadata.sql`.
+Crear una cuenta de prueba desde Supabase Auth; la interfaz actual permite
+iniciar sesión, no registrar cuentas. No usar datos personales en ejemplos.
 
 ```bash
 npm run dev
 ```
 
-Abrir http://localhost:3000 en el navegador.
+Abrir `http://localhost:3000`. Para probar desde el teléfono, usar la dirección
+de red que muestra Next.js y conservar el servidor encendido.
 
-Para probar desde Android, conectar el teléfono a la misma red Wi-Fi
-del computador y abrir la dirección Network que muestra la terminal.
-El servidor debe permanecer encendido.
+## Verificación
 
-## Estructura principal
+```bash
+node --test tests/*.test.cjs
+npx eslint app
+npx tsc --noEmit
+npm run build
+npm audit --audit-level=moderate
+```
 
-- `app/page.tsx`: guardado rápido, búsqueda y almacenamiento local.
-- `app/components/TechniqueCard.tsx`: visualización, edición y eliminación.
-- `app/types/technique.ts`: modelo de datos y clasificación pendiente.
+La compilación Android y su contrato se describen en
+[android-native/README.md](android-native/README.md). La CI de pull requests
+compila y prueba; distribuir una APK requiere además comprobar el origen web
+mediante la ejecución manual del workflow **Authenticated native CHECK**.
 
-## Tecnologías
+## Arquitectura
 
-Next.js, React, TypeScript y Tailwind CSS.
+- Next.js, React y TypeScript para la interfaz y las rutas del servidor.
+- Supabase Auth y PostgreSQL con RLS para las fichas de cada cuenta.
+- WebView Android, puente versionado y MediaStore para comprobar archivos locales.
+- Vercel para el despliegue web; GitHub Actions para pruebas y compilación.
 
-## Almacenamiento actual
+Los videos locales no se suben a Supabase ni a Vercel. La verificación CHECK
+actual necesita conexión; no se declara soporte completo sin conexión.
 
-Los datos pertenecen al navegador y a la dirección desde la que se abre
-la aplicación. Todavía no se sincronizan entre el computador y el teléfono.
-Borrar los datos del sitio puede eliminar la biblioteca local.
+## Documentación
 
-## Próximas etapas
-
-- Inicio de sesión.
-- Biblioteca sincronizada entre dispositivos.
-- Importación de enlaces guardados anteriormente.
-- Integración con el menú Compartir de Android.
+- [Seguridad y despliegue](SECURITY.md)
+- [Contrato y pruebas de la APK](android-native/README.md)
+- [Almacenamiento de videos](docs/almacenamiento-videos.md)
+- [Metadatos](docs/metadatos.md)
+- [Diagnóstico del puente Android](docs/diagnostico-bridge-android.md)
 
 ## Licencia
 
-Consultar el archivo LICENSE.
+[MIT](LICENSE).

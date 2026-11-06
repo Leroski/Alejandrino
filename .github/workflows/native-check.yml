@@ -2,8 +2,14 @@ name: Authenticated native CHECK
 
 on:
   pull_request:
-    paths: ['android-native/**', 'app/**', 'tests/**', 'package*.json', '.github/workflows/native-check.yml']
+    paths: ['android-native/**', 'app/**', 'tests/**', 'scripts/**', 'next.config.ts', 'package*.json', '.github/workflows/native-check.yml']
   workflow_dispatch:
+    inputs:
+      web_origin:
+        description: 'Origen HTTPS público con la web y CHECK desplegados, sin tokens ni parámetros'
+        required: true
+        type: string
+        default: 'https://proyalejandrino-git-stabilize-android-bridge-baseline-leroski.vercel.app'
 
 permissions:
   contents: read
@@ -29,11 +35,21 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
+    env:
+      WEB_ORIGIN: ${{ inputs.web_origin || 'https://proyalejandrino-git-stabilize-android-bridge-baseline-leroski.vercel.app' }}
     defaults:
       run:
         working-directory: android-native
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify deployed origin before distributing an APK
+        if: github.event_name == 'workflow_dispatch'
+        run: node ../scripts/check-apk-origin.cjs "$WEB_ORIGIN"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -46,8 +62,9 @@ jobs:
       - name: Test, lint and build the CHECK-only APK
         run: >-
           gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
-          -PALEJANDRINO_WEB_URL=https://proyalejandrino-git-stabilize-android-bridge-baseline-leroski.vercel.app
+          "-PALEJANDRINO_WEB_URL=$WEB_ORIGIN"
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
         with:
           name: alejandrino-check-debug
           path: android-native/app/build/outputs/apk/debug/app-debug.apk

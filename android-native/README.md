@@ -16,7 +16,20 @@ un archivo real sigue pendiente junto con la recuperación/importación del índ
 
 Requiere JDK 17, Gradle 8.11.1 y Android SDK 35. Se puede abrir `android-native/`
 en Android Studio o usar la APK del workflow **Authenticated native CHECK**.
-La CI genera `alejandrino-check-debug`, que contiene `app-debug.apk`.
+Las ejecuciones de PR compilan y prueban, pero no distribuyen APK. Para distribuir,
+ejecutar manualmente el workflow con `web_origin`: primero verifica que la web
+y la API CHECK sean accesibles sin login de Vercel. Solo entonces genera el
+artefacto `alejandrino-check-debug`, que contiene `app-debug.apk`.
+
+También se puede verificar antes de compilar:
+
+```bash
+node scripts/check-apk-origin.cjs https://DOMINIO_CONFIGURADO
+```
+
+Esta prueba no usa credenciales ni escribe en Supabase. Rechaza redirects, HTML
+de login y una API que acepte peticiones sin sesión. No acredita una sesión
+real ni la instalación en teléfono.
 
 Para compilar localmente, desde `android-native/`:
 

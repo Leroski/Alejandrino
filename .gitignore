@@ -32,6 +32,18 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# Private credentials and signing keys
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+cookies.txt
+cookies.*.txt
+credentials.json
+service-account*.json
 
 # vercel
 .vercel
