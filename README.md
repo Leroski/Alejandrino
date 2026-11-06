@@ -1,63 +1,66 @@
 # Alejandrino
 
-Biblioteca personal de técnicas de grappling, pensada principalmente para
-usarse desde el teléfono Android.
+Biblioteca personal de técnicas de judo y BJJ, desarrollada con Next.js,
+TypeScript y Supabase, para guardar y clasificar enlaces desde el teléfono.
 
-## Funciones actuales
+## Funciones de la web
 
-- Guardar rápidamente enlaces de TikTok, Instagram y YouTube.
-- Clasificar las técnicas después de guardarlas.
-- Editar nombre, disciplina, posición y categoría.
-- Buscar técnicas y filtrar las pendientes de clasificación.
-- Detectar enlaces repetidos.
-- Eliminar técnicas.
-- Conservar la biblioteca en el navegador mediante localStorage.
+- Inicio de sesión y biblioteca sincronizada entre dispositivos.
+- Guardado de enlaces de Instagram, TikTok y YouTube.
+- Edición de nombre, disciplina, posición y categoría; búsqueda y filtrado.
+- Detección de enlaces repetidos e importación de la biblioteca local anterior.
+- Recepción de enlaces compartidos desde Android mediante la PWA.
+- Metadatos de TikTok y YouTube mediante oEmbed.
 
-La aplicación guarda enlaces, no descarga los videos.
+La web guarda fichas y enlaces. No sube ni descarga archivos de video.
+La APK nativa y la integración con archivos locales se desarrollan por separado
+en el [PR #6](https://github.com/Leroski/Alejandrino/pull/6). Su recorrido completo
+en teléfono sigue pendiente de validación. Las ramas experimentales no son una
+versión estable para distribuir.
 
 ## Desarrollo local
 
-Instalar las dependencias:
+Requiere Node.js 24 y un proyecto Supabase propio.
 
 ```bash
-npm install
+npm ci
+cp .env.example .env.local
 ```
 
-Iniciar el servidor:
+Completar `.env.local` con la URL del proyecto y su clave **Publishable**.
+No usar una clave secreta ni `service_role`. Revisar y ejecutar, en un proyecto
+nuevo, `supabase/01-library.sql` y luego `supabase/02-video-metadata.sql`.
+Crear una cuenta de prueba en Supabase Auth: la interfaz permite iniciar sesión,
+no registrar nuevas cuentas.
 
 ```bash
 npm run dev
 ```
 
-Abrir http://localhost:3000 en el navegador.
+Abrir `http://localhost:3000`. Para probar desde el teléfono, usar la dirección
+de red indicada por Next.js y mantener el servidor encendido.
 
-Para probar desde Android, conectar el teléfono a la misma red Wi-Fi
-del computador y abrir la dirección Network que muestra la terminal.
-El servidor debe permanecer encendido.
+## Verificación
 
-## Estructura principal
+```bash
+node --test tests/*.test.cjs
+npx eslint app
+npx tsc --noEmit
+npm run build
+npm audit --audit-level=moderate
+```
 
-- `app/page.tsx`: guardado rápido, búsqueda y almacenamiento local.
-- `app/components/TechniqueCard.tsx`: visualización, edición y eliminación.
-- `app/types/technique.ts`: modelo de datos y clasificación pendiente.
+## Arquitectura y privacidad
 
-## Tecnologías
+- Next.js, React, TypeScript y Tailwind CSS para la web.
+- Supabase Auth y PostgreSQL con RLS para aislar las fichas de cada cuenta.
+- Vercel para el despliegue; GitHub Actions para controles automáticos.
 
-Next.js, React, TypeScript y Tailwind CSS.
-
-## Almacenamiento actual
-
-Los datos pertenecen al navegador y a la dirección desde la que se abre
-la aplicación. Todavía no se sincronizan entre el computador y el teléfono.
-Borrar los datos del sitio puede eliminar la biblioteca local.
-
-## Próximas etapas
-
-- Inicio de sesión.
-- Biblioteca sincronizada entre dispositivos.
-- Importación de enlaces guardados anteriormente.
-- Integración con el menú Compartir de Android.
+Las claves privadas y variables locales no se versionan. La configuración de
+RLS incluida debe estar aplicada también en el proyecto Supabase real.
+Consultar [SECURITY.md](SECURITY.md), [metadatos](docs/metadatos.md) y
+[almacenamiento de videos](docs/almacenamiento-videos.md).
 
 ## Licencia
 
-Consultar el archivo LICENSE.
+[MIT](LICENSE).
