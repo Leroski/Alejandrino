@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { sendNative, subscribeNative, useNativeAndroid } from "../lib/native-bridge";
 import { cleanField, isPending, type Technique } from "../types/technique";
 
 import { metadataMessage, safeThumbnail, type VideoMetadata } from "../types/video-metadata";
@@ -28,6 +29,21 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
   const [draft, setDraft] = useState<Technique | null>(null);
   const [error, setError] = useState("");
   const [brokenThumbnail, setBrokenThumbnail] = useState("");
+  const native = useNativeAndroid();
+  const [localStatus, setLocalStatus] = useState<"missing" | "downloading" | "merging" | "available">("missing");
+  const [nativeNotice, setNativeNotice] = useState("");
+
+  useEffect(() => {
+    if (!native) return;
+    const unsubscribe = subscribeNative(result => {
+      if (result.techniqueId !== technique.id) return;
+      if (result.status) setLocalStatus(result.status);
+      if (result.type === "ERROR") setNativeNotice(result.message || "No se pudo descargar.");
+      else if (result.message) setNativeNotice(result.message);
+    });
+    sendNative({ type: "CHECK", userId: technique.user_id, techniqueId: technique.id });
+    return unsubscribe;
+  }, [native, technique.id, technique.user_id]);
   const thumbnail = safeThumbnail(metadata?.thumbnail_url);
   const previewMessage = metadataBusy ? "Buscando información del video…" : metadataMessage(metadata);
   const pending = isPending(technique);
@@ -78,9 +94,47 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
         </button>}
       <p className="mt-1 truncate text-sm text-zinc-400" title={technique.url}>{technique.url}</p>
       {labels.length > 0 && <p className="mt-3 break-words text-sm text-zinc-300">{labels.join(" · ")}</p>}
+      {native && (
+        <div className="mt-3 grid gap-2">
+          <p role="status" className="text-sm text-zinc-300">
+            {localStatus === "available" ? "Disponible en este dispositivo" :
+              localStatus === "downloading" ? "Descargando…" :
+              localStatus === "merging" ? "Uniendo audio y video…" :
+              "No descargado en este dispositivo"}
+          </p>
+          {nativeNotice && <p role="status" className="text-xs text-zinc-400">{nativeNotice}</p>}
+          {localStatus === "available" ? (
+            <button type="button" className={button + " bg-emerald-700 text-white"}
+              onClick={() => sendNative({ type: "OPEN", userId: technique.user_id, techniqueId: technique.id })}>
+              Reproducir video local
+            </button>
+          ) : (
+            <button type="button" disabled={localStatus === "downloading" || localStatus === "merging"}
+              className={button + " bg-zinc-700 text-white disabled:opacity-50"}
+              onClick={() => {
+                setNativeNotice("");
+                setLocalStatus("downloading");
+                sendNative({ type: "DOWNLOAD", userId: technique.user_id,
+                  techniqueId: technique.id, url: technique.url });
+              }}>
+              {localStatus === "downloading" || localStatus === "merging" ? "Procesando…" : "Descargar a este teléfono"}
+            </button>
+          )}
+        </div>
+      )}
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <a href={technique.url} target="_blank" rel="noopener noreferrer"
-          className={`${button} bg-red-600 text-center text-white hover:bg-red-500`}>Ver video</a>
+        {native ? (
+          <button type="button"
+            onClick={() => sendNative({ type: "OPEN_EXTERNAL", url: technique.url })}
+            className={`${button} bg-red-600 text-center text-white hover:bg-red-500`}>
+            Ver video
+          </button>
+        ) : (
+          <a href={technique.url} target="_blank" rel="noopener noreferrer"
+            className={`${button} bg-red-600 text-center text-white hover:bg-red-500`}>
+            Ver video
+          </a>
+        )}
         <button type="button" disabled={disabled} aria-expanded={!!draft} aria-controls={`edit-${technique.id}`}
           className={`${button} bg-zinc-800 hover:bg-zinc-700`}
           onClick={() => { setError(""); setDraft(draft ? null : technique); }}>

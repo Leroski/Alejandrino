@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import AuthGate from "../components/AuthGate";
-import { addTechnique, draftFromText } from "../lib/techniques";
+import { addTechnique, draftFromText, findExistingTechnique } from "../lib/techniques";
 import { sharedLink } from "../lib/shared-link";
 import { errorMessage } from "../lib/supabase";
 import { requestVideoMetadata } from "../lib/video-metadata";
+import { isNativeAndroid, sendNative, subscribeNative } from "../lib/native-bridge";
+import { useEffect } from "react";
 
 function SaveSharedLink({ initialUrl, user }: { initialUrl: string; user: User }) {
   const [url, setUrl] = useState(initialUrl);
@@ -16,6 +18,14 @@ function SaveSharedLink({ initialUrl, user }: { initialUrl: string; user: User }
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const saving = useRef(false);
+  const [downloadNotice, setDownloadNotice] = useState("");
+
+  useEffect(() => subscribeNative(result => {
+    if (result.type === "ERROR") setDownloadNotice(result.message || "Error al descargar.");
+    else if (result.type === "STATUS" || result.type === "AVAILABILITY") {
+      setDownloadNotice(result.message || (result.status === "available" ? "Video disponible en el teléfono." : "Descargando…"));
+    }
+  }), []);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,7 +38,19 @@ function SaveSharedLink({ initialUrl, user }: { initialUrl: string; user: User }
       // La confirmación de guardado no espera a la vista previa. Si cierras la app,
       // la biblioteca vuelve a intentar las consultas pendientes cuando la abras.
       if (item) void requestVideoMetadata(item.id, user.id).catch(() => {});
+      // Duplicados: consulta la ficha existente sin crear otra ni modificarla.
+      let confirmed = item;
+      if (!confirmed && isNativeAndroid()) {
+        confirmed = await findExistingTechnique(user.id, url);
+      }
       setNotice(item ? "Guardado en tu biblioteca." : "Este enlace ya estaba guardado.");
+      if (confirmed && isNativeAndroid()) {
+        setDownloadNotice("Descargando video en este dispositivo…");
+        if (!sendNative({ type: "DOWNLOAD", userId: user.id,
+          techniqueId: confirmed.id, url: confirmed.url })) {
+          setDownloadNotice("No se encontró el puente Android. Actualiza la APK y la web.");
+        }
+      }
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
@@ -44,6 +66,7 @@ function SaveSharedLink({ initialUrl, user }: { initialUrl: string; user: User }
       {notice ? (
         <>
           <p role="status" className="mt-5 text-emerald-300">{notice}</p>
+          {downloadNotice && <p role="status" className="mt-3 text-sm text-zinc-200">{downloadNotice}</p>}
           <p className="mt-2 text-sm text-zinc-400">Puedes volver a Instagram o TikTok. La clasificación queda para después.</p>
           <Link href="/" className="mt-5 block min-h-12 rounded-xl bg-red-600 px-5 py-3 text-center font-semibold">Ver mi biblioteca</Link>
         </>

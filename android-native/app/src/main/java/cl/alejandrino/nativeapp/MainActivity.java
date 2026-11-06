@@ -1,16 +1,20 @@
 package cl.alejandrino.nativeapp;
 
 import android.app.Activity;
-import android.content.ContentValues;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
-import android.provider.MediaStore;
 import android.util.Log;
-import android.view.Gravity;
-import android.widget.Button;
-import android.widget.LinearLayout;
+import android.view.ViewGroup;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceError;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.TextView;
+
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
 
 import com.chaquo.python.Python;
 import com.chaquo.python.PyObject;
@@ -21,129 +25,298 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.OutputStream;
+import java.io.FileOutputStream;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+/** Native Android shell for Alejandrino. Web app owns auth & metadata; Android owns media. */
 public final class MainActivity extends Activity {
     private static final String TAG = "AlejandrinoNative";
-    private TextView status;
+    private static final Pattern UUID_PATTERN = Pattern.compile(
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+    private WebView web;
+    private NativeFileIndex files;
     private volatile boolean busy = false;
+    private volatile String activeTechniqueId = "";
+    private volatile String activeStage = "missing";
+    private String baseUrl;
+    private String allowedOrigin;
 
-    @Override public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(32, 64, 32, 24);
-        root.setGravity(Gravity.CENTER_HORIZONTAL);
-        TextView heading = new TextView(this);
-        heading.setText("Alejandrino · prueba Android");
-        heading.setTextSize(22);
-        root.addView(heading);
-        status = new TextView(this);
-        status.setText("Comparte un enlace público desde Instagram o TikTok hacia Alejandrino.");
-        status.setPadding(0, 36, 0, 32);
-        root.addView(status);
-        Button info = new Button(this);
-        info.setText("Cómo probar");
-        info.setOnClickListener(v -> status.setText(
-            "Abre Instagram → Compartir → Alejandrino. El MP4 se guarda en Download/Alejandrino."));
-        root.addView(info);
-        setContentView(root);
-        consume(getIntent());
+    @Override public void onCreate(Bundle state) {
+        super.onCreate(state);
+        files = new NativeFileIndex(this);
+        baseUrl = BuildConfig.ALEJANDRINO_WEB_URL.trim().replaceAll("/+$", "");
+        try {
+            URI parsed = new URI(baseUrl);
+            if (!"https".equals(parsed.getScheme()) || parsed.getHost() == null ||
+                parsed.getUserInfo() != null || parsed.getPort() != -1 ||
+                (parsed.getPath() != null && !parsed.getPath().isEmpty()) ||
+                parsed.getQuery() != null || parsed.getFragment() != null) {
+                throw new Exception("URL no válida");
+            }
+            allowedOrigin = "https://" + parsed.getHost().toLowerCase();
+        } catch (Exception invalid) {
+            TextView error = new TextView(this);
+            error.setPadding(32, 64, 32, 32);
+            error.setText("Configura ALEJANDRINO_WEB_URL con el origen HTTPS de tu despliegue en android-native/gradle.properties.");
+            setContentView(error);
+            return;
+        }
+
+        web = new WebView(this);
+        web.setLayoutParams(new ViewGroup.LayoutParams(-1, -1));
+        setContentView(web);
+        WebSettings settings = web.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        Log.i(TAG, "Origen web configurado: " + allowedOrigin);
+        web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
+                Log.i(TAG, "WebView inició navegación: " + url);
+            }
+            @Override public void onPageFinished(WebView view, String url) {
+                Log.i(TAG, "WebView cargó: " + url);
+                if (url.startsWith(allowedOrigin + "/")) {
+                    view.evaluateJavascript("typeof window.AlejandrinoBridge", result ->
+                        Log.i(TAG, "Puente JS en origen autorizado: " + result));
+                } else {
+                    Log.w(TAG, "La WebView terminó en otro origen; puente nativo deshabilitado");
+                }
+            }
+            @Override public void onReceivedError(WebView view, WebResourceRequest request,
+                                                   WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    Log.e(TAG, "Error de página WebView: " + request.getUrl() +
+                        " (" + error.getErrorCode() + ") " + error.getDescription());
+                }
+            }
+            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                if (!request.isForMainFrame()) return false;
+                String origin = uri.getScheme() + "://" + uri.getAuthority();
+                Log.i(TAG, "Navegación de página principal: " + uri);
+                if (allowedOrigin.equals(origin)) return false;
+                if (request.hasGesture() && "https".equals(uri.getScheme())) {
+                    Log.i(TAG, "Abriendo navegación externa solicitada por usuario: " + origin);
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
+                    catch (Exception error) { Log.e(TAG, "No se pudo abrir el enlace", error); }
+                    return true;
+                }
+                // A redirect may point to another Vercel host. NEVER silently open
+                // the main app in Chrome, because this hides the native controls.
+                Log.e(TAG, "WebView bloqueó cambio de origen: " + origin +
+                    " (permitido: " + allowedOrigin + ")");
+                TextView warning = new TextView(MainActivity.this);
+                warning.setPadding(32, 64, 32, 32);
+                warning.setText("Alejandrino intentó abrir otro dominio:\\n" + origin +
+                    "\\n\\nDominio autorizado:\\n" + allowedOrigin +
+                    "\\n\\nComprueba la URL de Vercel configurada en Gradle.");
+                setContentView(warning);
+                return true;
+            }
+        });
+
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            TextView error = new TextView(this);
+            error.setPadding(32, 64, 32, 32);
+            error.setText("Esta versión de Android System WebView no admite mensajes seguros. Actualiza Android System WebView.");
+            setContentView(error);
+            return;
+        }
+        WebViewCompat.addWebMessageListener(web, "AlejandrinoBridge",
+            Collections.singleton(allowedOrigin), (view, message, origin, isMainFrame, replyProxy) -> {
+                if (!isMainFrame || !allowedOrigin.equals(origin.toString()) || message.getData() == null) return;
+                handleNativeMessage(message.getData());
+            });
+        navigateShared(getIntent());
     }
 
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        consume(intent);
+        if (web != null && allowedOrigin != null) navigateShared(intent);
     }
 
-    private void consume(Intent intent) {
-        if (!Intent.ACTION_SEND.equals(intent.getAction())) return;
-        if (!"text/plain".equals(intent.getType())) return;
-        String text = intent.getStringExtra(Intent.EXTRA_TEXT);
-        if (text == null) return;
-        java.util.regex.Matcher matcher = java.util.regex.Pattern
-            .compile("https://[^\\s<>\\\"']+").matcher(text);
-        if (!matcher.find()) { status.setText("No se encontró una URL."); return; }
-        download(matcher.group());
+    private void navigateShared(Intent intent) {
+        if (Intent.ACTION_SEND.equals(intent.getAction()) && "text/plain".equals(intent.getType())) {
+            String text = intent.getStringExtra(Intent.EXTRA_TEXT);
+            if (text != null && text.length() <= 20000) {
+                Matcher matcher = Pattern.compile("https://[^\\s<>\\\"']+").matcher(text);
+                if (matcher.find()) {
+                    String shared = matcher.group().replaceAll("[.,;!?\\)]+$", "");
+                    web.loadUrl(baseUrl + "/compartir?text=" +
+                        URLEncoder.encode(shared, StandardCharsets.UTF_8));
+                    return;
+                }
+            }
+        }
+        if (web.getUrl() == null) web.loadUrl(baseUrl + "/");
     }
 
-    private void show(String message) {
-        runOnUiThread(() -> status.setText(message));
+    private void handleNativeMessage(String raw) {
+        try {
+            JSONObject m = new JSONObject(raw);
+            String type = m.optString("type", "");
+            Log.i(TAG, "Puente recibido: " + type);
+            if ("OPEN_EXTERNAL".equals(type)) {
+                String videoUrl = m.optString("url", "");
+                Uri uri = Uri.parse(videoUrl);
+                String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(java.util.Locale.ROOT);
+                boolean allowedHost =
+                    host.equals("instagram.com") || host.endsWith(".instagram.com") ||
+                    host.equals("tiktok.com") || host.endsWith(".tiktok.com") ||
+                    host.equals("youtube.com") || host.endsWith(".youtube.com") ||
+                    host.equals("youtu.be");
+                if (!"https".equals(uri.getScheme()) || !allowedHost ||
+                    (uri.getEncodedAuthority() != null && uri.getEncodedAuthority().contains("@")) ||
+                    videoUrl.length() > 2048) {
+                    Log.w(TAG, "Enlace externo rechazado: URL o dominio no admitidos");
+                    return;
+                }
+                runOnUiThread(() -> {
+                    try {
+                        Intent external = new Intent(Intent.ACTION_VIEW, uri);
+                        startActivity(external);
+                    } catch (Exception error) {
+                        Log.e(TAG, "No se pudo abrir el video original", error);
+                    }
+                });
+                return;
+            }
+            String user = m.optString("userId", "");
+            String id = m.optString("techniqueId", "");
+            boolean userValid = UUID_PATTERN.matcher(user).matches();
+            boolean techniqueValid = UUID_PATTERN.matcher(id).matches();
+            if (!userValid || !techniqueValid) {
+                // Never log raw user/technique identifiers or session tokens.
+                Log.w(TAG, "Puente rechazado: type=" + type +
+                    " userId válido=" + userValid + " (longitud=" + user.length() + ")" +
+                    " techniqueId válido=" + techniqueValid + " (longitud=" + id.length() + ")");
+                // Reject the operation, but respond so React doesn't show
+                // a permanent 'Descargando...' state after a failed request.
+                if (id.length() > 0 && id.length() <= 128) {
+                    emit("ERROR", id, "missing",
+                        "No se inició la descarga: la ficha o el usuario tienen un identificador inválido.");
+                }
+                return;
+            }
+            if (type.equals("CHECK")) {
+                if (busy && id.equals(activeTechniqueId)) {
+                    emit("STATUS", id, activeStage, "Descarga en curso…");
+                } else {
+                    emit("AVAILABILITY", id, files.find(user, id) != null ? "available" : "missing", "");
+                }
+            } else if (type.equals("OPEN")) {
+                runOnUiThread(() -> {
+                    try { files.open(user, id); }
+                    catch (Exception error) { emit("ERROR", id, "missing", error.getMessage()); }
+                });
+            } else if (type.equals("DOWNLOAD")) {
+                String url = m.optString("url", "");
+                if (url.length() > 2048 || !url.startsWith("https://")) {
+                    Log.w(TAG, "Descarga rechazada: URL inválida");
+                    emit("ERROR", id, "missing", "URL de descarga no válida.");
+                    return;
+                }
+                download(user, id, url);
+            }
+        } catch (Exception error) {
+            Log.e(TAG, "Mensaje nativo no válido", error);
+        }
     }
 
-    private void download(String url) {
-        if (busy) { show("Ya hay una descarga en curso."); return; }
+    private void emit(String type, String id, String status, String message) {
+        try {
+            JSONObject response = new JSONObject();
+            response.put("type", type);
+            response.put("techniqueId", id);
+            response.put("status", status);
+            response.put("available", "available".equals(status));
+            response.put("message", message);
+            String js = "window.dispatchEvent(new CustomEvent('alejandrino:native',{detail:" +
+                response.toString() + "}))";
+            runOnUiThread(() -> {
+                if (web != null && web.getUrl() != null &&
+                    web.getUrl().startsWith(allowedOrigin + "/")) web.evaluateJavascript(js, null);
+            });
+        } catch (Exception error) {
+            Log.e(TAG, "No se pudo notificar a la biblioteca", error);
+        }
+    }
+
+    private void download(String user, String id, String url) {
+        if (busy) {
+            emit("ERROR", id, "missing", "Ya hay otra descarga en curso.");
+            return;
+        }
+        if (files.find(user, id) != null) {
+            emit("AVAILABILITY", id, "available", "Este video ya está descargado.");
+            return;
+        }
         busy = true;
-        show("Descargando…");
+        activeTechniqueId = id;
+        activeStage = "downloading";
+        Log.i(TAG, "Inicio descarga id=" + id + " URL=" + url);
+        emit("STATUS", id, "downloading", "Descargando video…");
         new Thread(() -> {
-            File taskDir = new File(getCacheDir(), "job-" + UUID.randomUUID());
+            File jobDir = new File(getCacheDir(), "job-" + UUID.randomUUID());
             try {
                 PyObject module = Python.getInstance().getModule("extractor");
-                JSONObject result = new JSONObject(module.callAttr("extract", url,
-                    taskDir.getAbsolutePath()).toString());
-                String videoPath = result.getString("video_path");
-                String audioPath = result.optString("audio_path", "");
-                File merged = new File(taskDir, "final.mp4");
-                if (!audioPath.isEmpty()) {
-                    show("Uniendo audio y video…");
+                JSONObject extracted = new JSONObject(module.callAttr("extract", url,
+                    jobDir.getAbsolutePath()).toString());
+                Log.i(TAG, "Extracción terminada id=" + id);
+                String video = extracted.getString("video_path");
+                String audio = extracted.isNull("audio_path") ? "" : extracted.optString("audio_path", "");
+                File merged = new File(jobDir, "final.mp4");
+                if (!audio.isEmpty()) {
+                    activeStage = "merging";
+                    emit("STATUS", id, "merging", "Uniendo audio y video…");
+                    Log.i(TAG, "Iniciando FFmpegKit id=" + id);
                     String[] command = {
-                        "-y", "-i", videoPath, "-i", audioPath,
-                        "-map", "0:v:0", "-map", "1:a:0", "-c", "copy",
-                        "-movflags", "+faststart", merged.getAbsolutePath()
+                        "-y", "-i", video, "-i", audio, "-map", "0:v:0",
+                        "-map", "1:a:0", "-c", "copy", "-movflags", "+faststart",
+                        merged.getAbsolutePath()
                     };
-                    Log.i(TAG, "Iniciando FFmpegKit para combinar pistas descargadas");
                     var session = FFmpegKit.executeWithArguments(command);
-                    Log.i(TAG, "FFmpegKit terminó con código: " + session.getReturnCode());
+                    Log.i(TAG, "FFmpegKit terminó id=" + id + " código=" + session.getReturnCode());
                     if (!ReturnCode.isSuccess(session.getReturnCode())) {
-                        throw new Exception("FFmpeg no pudo unir las pistas. Código: "
-                            + session.getReturnCode());
+                        throw new Exception("FFmpegKit falló: " + session.getReturnCode());
                     }
                 } else {
-                    // Una pista progresiva puede traer video y audio combinados.
-                    File original = new File(videoPath);
-                    try (FileInputStream in = new FileInputStream(original);
-                         java.io.FileOutputStream out = new java.io.FileOutputStream(merged)) {
+                    try (FileInputStream in = new FileInputStream(video);
+                         FileOutputStream out = new FileOutputStream(merged)) {
                         in.transferTo(out);
                     }
                 }
-
-                if (!merged.exists() || merged.length() == 0)
-                    throw new Exception("Archivo de salida vacío.");
-                ContentValues values = new ContentValues();
-                values.put(MediaStore.Downloads.DISPLAY_NAME,
-                    "Alejandrino-" + result.getString("id") + "-" +
-                    UUID.randomUUID().toString().substring(0, 8) + ".mp4");
-                values.put(MediaStore.Downloads.MIME_TYPE, "video/mp4");
-                values.put(MediaStore.Downloads.RELATIVE_PATH,
-                    Environment.DIRECTORY_DOWNLOADS + "/Alejandrino");
-                values.put(MediaStore.Downloads.IS_PENDING, 1);
-                android.net.Uri destination =
-                    getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                if (destination == null) throw new Exception("No se pudo crear el archivo.");
-                boolean success = false;
-                try (OutputStream out = getContentResolver().openOutputStream(destination);
-                     FileInputStream in = new FileInputStream(merged)) {
-                    if (out == null) throw new Exception("No se pudo abrir almacenamiento.");
-                    in.transferTo(out);
-                    success = true;
-                } finally {
-                    if (!success) getContentResolver().delete(destination, null, null);
-                }
-                values.clear();
-                values.put(MediaStore.Downloads.IS_PENDING, 0);
-                getContentResolver().update(destination, values, null, null);
-                show("Descarga lista en Download/Alejandrino.");
+                if (!merged.isFile() || merged.length() == 0) throw new Exception("Archivo de salida vacío");
+                Log.i(TAG, "Guardando MP4 id=" + id + " bytes=" + merged.length());
+                files.store(user, id, merged);
+                Log.i(TAG, "MP4 guardado y vinculado id=" + id);
+                emit("STATUS", id, "available", "Video descargado y vinculado a tu ficha.");
             } catch (Exception | LinkageError error) {
-                Log.e(TAG, "Descarga/mezcla Android fallida", error);
-                show("Error: " + error.getClass().getSimpleName() + ": " + error.getMessage());
+                Log.e(TAG, "Fallo durante descarga local", error);
+                emit("ERROR", id, "missing", "Falló la descarga: " + error.getMessage());
             } finally {
+                File[] parts = jobDir.listFiles();
+                if (parts != null) for (File part : parts) part.delete();
+                jobDir.delete();
                 busy = false;
-                File[] files = taskDir.listFiles();
-                if (files != null) for (File file : files) file.delete();
-                taskDir.delete();
+                activeTechniqueId = "";
+                activeStage = "missing";
             }
         }).start();
+    }
+
+    @Override public void onBackPressed() {
+        if (web != null && web.canGoBack()) web.goBack();
+        else super.onBackPressed();
     }
 }

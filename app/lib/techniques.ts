@@ -15,6 +15,71 @@ export function extractUrl(text: string): string {
   } catch { throw new Error("Pega un enlace http o https válido, de hasta 2048 caracteres."); }
 }
 
+/** Normaliza solo enlaces cuya identidad de publicación es conocida.
+ * No cambiamos enlaces ajenos porque sus parámetros pueden ser significativos. */
+export function canonicalVideoUrl(value: string): string {
+  const parsed = new URL(extractUrl(value));
+  const host = parsed.hostname.toLowerCase();
+  const segments = parsed.pathname.split("/").filter(Boolean);
+  const instagram = ["instagram.com", "www.instagram.com", "m.instagram.com"].includes(host);
+  if (instagram && segments.length >= 2 &&
+      ["p", "reel", "reels", "tv"].includes(segments[0]) &&
+      /^[a-zA-Z0-9_-]{5,32}$/.test(segments[1])) {
+    return `https://www.instagram.com/${segments[0] === "reels" ? "reel" : segments[0]}/${segments[1]}/`;
+  }
+  if (["www.tiktok.com", "m.tiktok.com", "tiktok.com"].includes(host) &&
+      segments.length >= 3 && segments[0].startsWith("@") &&
+      segments[1] === "video" && /^\d{8,30}$/.test(segments[2])) {
+    return `https://www.tiktok.com/${segments[0]}/video/${segments[2]}`;
+  }
+  if (["vm.tiktok.com", "vt.tiktok.com"].includes(host) &&
+      segments.length >= 1 && /^[a-zA-Z0-9]+$/.test(segments[0])) {
+    return `https://${host}/${segments[0]}/`;
+  }
+  return parsed.href;
+}
+
+/** Identidad de una publicación independiente de parámetros y forma del enlace.
+ * Enlaces cortos distintos de TikTok pueden requerir resolver la redirección. */
+export function socialVideoIdentity(value: string): string | null {
+  try {
+    const url = new URL(extractUrl(value));
+    const host = url.hostname.toLowerCase();
+    const segments = url.pathname.split("/").filter(Boolean);
+    if (["instagram.com", "www.instagram.com", "m.instagram.com"].includes(host) &&
+        segments.length >= 2 && ["p", "reel", "reels", "tv"].includes(segments[0]) &&
+        /^[a-zA-Z0-9_-]{5,32}$/.test(segments[1])) {
+      return `instagram:${segments[1]}`;
+    }
+    if (["www.tiktok.com", "m.tiktok.com", "tiktok.com"].includes(host) &&
+        segments.length >= 3 && segments[1] === "video" &&
+        /^\d{8,30}$/.test(segments[2])) {
+      return `tiktok:${segments[2]}`;
+    }
+    if (["vm.tiktok.com", "vt.tiktok.com"].includes(host) &&
+        segments.length >= 1 && /^[a-zA-Z0-9]+$/.test(segments[0])) {
+      return `tiktok-short:${segments[0]}`;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export async function findExistingTechnique(userId: string, value: string): Promise<Technique | null> {
+  const url = canonicalVideoUrl(value);
+  const { data, error } = await getSupabase().from("techniques")
+    .select("*").eq("user_id", userId).eq("url", url).maybeSingle();
+  if (error) throw error;
+  if (data) return data;
+
+  const identity = socialVideoIdentity(url);
+  if (!identity) return null;
+  // Detecta fichas anteriores guardadas con igsh, utm o /p/ frente a /reel/.
+  const items = await listTechniques(userId);
+  return items.find(item => socialVideoIdentity(item.url) === identity) ?? null;
+}
+
 export function detectSource(value: string): string {
   const host = new URL(value).hostname.toLowerCase();
   const belongsTo = (domain: string) => host === domain || host.endsWith(`.${domain}`);
@@ -25,7 +90,7 @@ export function detectSource(value: string): string {
 }
 
 export function draftFromText(text: string): TechniqueDraft {
-  const url = extractUrl(text);
+  const url = canonicalVideoUrl(text);
   const source = detectSource(url);
   const stamp = new Date().toLocaleString("es-CL", {
     day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
@@ -57,7 +122,8 @@ export async function listTechniques(userId: string, signal?: AbortSignal): Prom
 }
 
 export async function addTechnique(userId: string, draft: TechniqueDraft) {
-  // El índice único y ON CONFLICT evitan duplicados incluso entre dos dispositivos.
+  if (await findExistingTechnique(userId, draft.url)) return null;
+  // El índice único y ON CONFLICT evitan duplicados de URL canonizada incluso entre dispositivos.
   const { data, error } = await getSupabase().from("techniques")
     .upsert({ ...draft, user_id: userId }, { onConflict: "user_id,url", ignoreDuplicates: true })
     .select("*").maybeSingle();
