@@ -13,11 +13,13 @@ La corrección aislada elimina el grupo adicional. No desactiva la validación,
 no admite ambos formatos ni cambia identificadores guardados. El formato textual
 se contrasta con [RFC 9562, sección 4](https://www.rfc-editor.org/rfc/rfc9562.html#section-4).
 
-El PR #6 parte de `main`. Este incremento amplía su diagnóstico con una prueba
-ejecutable sobre el código real, un parche de una línea y CI reproducible.
-**No incorpora la APK experimental a `main` ni integra todavía la corrección en
-una APK instalada.** El parche se aplica únicamente a una copia aislada durante
-la prueba. Esto permite comprobar una hipótesis sin importar toda la cadena de PR.
+El PR #6 parte de `main`. Su revisión inicial incorporó diagnóstico, prueba
+ejecutable, parche aislado y CI. La revisión siguiente incorpora una carcasa
+Android que solo implementa `CHECK`, con el validador correcto en
+`NativeCheckService.java`, autorización y respuestas correlacionadas.
+Ver [contrato, compilación y límites de la APK](../android-native/README.md).
+**Aún no está validada en el Galaxy A07.** El parche histórico se conserva para
+reproducir el defecto de PR #5 sin importar esa rama ni activar descargas.
 
 ## Fuentes inspeccionadas
 
@@ -125,13 +127,14 @@ falla antes y pasa después del parche, solo cambia una línea del código Andro
 y la CI repite la prueba sin credenciales de aplicación. Una CI verde aquí no
 equivale a los casos TA-06/TA-09 completados.
 
-El siguiente PR debe recuperar un `CHECK` mínimo con `protocolVersion`,
-`requestId`, error visible y sesión/propiedad verificadas, **sin iniciar descargas**.
-Debe probar IDs ausentes, malformados y pertenecientes a otra cuenta, mensajes
-desconocidos, respuestas ajenas/tardías y falta de respuesta. Los logs de pruebas
-no deben contener tokens, identificadores completos ni enlaces privados.
+La revisión actual implementa ese `CHECK` mínimo con `protocolVersion`,
+`requestId`, error visible y verificación de sesión/propiedad mediante el servidor
+de Alejandrino y Supabase, **sin iniciar descargas**. Incluye pruebas de IDs
+ausentes, malformados y de otra cuenta, acciones desconocidas, respuestas
+ajenas/tardías y falta de respuesta. No registra tokens, IDs ni enlaces en Logcat.
 
 Después, el Galaxy A07 debe comprobar `CHECK → missing/available`, un rechazo
 visible y el regreso desde un enlace externo. Solo entonces se recupera el
 recorrido con una ficha: guardar, descargar, vincular, reproducir y reiniciar.
-La APK instalada, la autenticación nativa y ese recorrido permanecen pendientes.
+La validación de la APK instalada con una cuenta real y ese recorrido permanecen
+pendientes. La variante debug se instala aparte y no hereda el índice anterior.

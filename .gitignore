@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Android local configuration and generated outputs
+/android-native/.gradle/
+/android-native/.idea/
+/android-native/local.properties
+/android-native/**/build/

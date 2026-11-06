@@ -4,14 +4,14 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Runs the actual UUID_PATTERN from MainActivity with Java, without Android or a session. */
+/** Runs the actual UUID_PATTERN from a Java source, without Android or a session. */
 class NativeUuidContractTest {
     private static int checks;
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1 || args.length > 2 ||
                 (args.length == 2 && !args[1].equals("--reproduce"))) {
-            throw new IllegalArgumentException("Usage: java NativeUuidContractTest.java MainActivity.java [--reproduce]");
+            throw new IllegalArgumentException("Usage: java NativeUuidContractTest.java JavaSource.java [--reproduce]");
         }
         String source = Files.readString(Path.of(args[0]));
         Matcher declaration = Pattern.compile(

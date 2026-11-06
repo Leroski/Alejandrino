@@ -1,0 +1,54 @@
+name: Authenticated native CHECK
+
+on:
+  pull_request:
+    paths: ['android-native/**', 'app/**', 'tests/**', 'package*.json', '.github/workflows/native-check.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/*.test.cjs
+      - run: npx eslint app
+      - run: npx tsc --noEmit
+      - run: npm run build
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-native
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Check the UUID validator used by this APK
+        run: bash ../scripts/check-native-uuid.sh
+      - name: Test, lint and build the CHECK-only APK
+        run: >-
+          gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+          -PALEJANDRINO_WEB_URL=https://proyalejandrino-git-stabilize-android-bridge-baseline-leroski.vercel.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alejandrino-check-debug
+          path: android-native/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
