@@ -193,8 +193,19 @@ public final class MainActivity extends Activity {
             }
             String user = m.optString("userId", "");
             String id = m.optString("techniqueId", "");
-            if (!UUID_PATTERN.matcher(user).matches() || !UUID_PATTERN.matcher(id).matches()) {
-                Log.w(TAG, "Puente rechazado por identificadores inválidos: " + type);
+            boolean userValid = UUID_PATTERN.matcher(user).matches();
+            boolean techniqueValid = UUID_PATTERN.matcher(id).matches();
+            if (!userValid || !techniqueValid) {
+                // Never log raw user/technique identifiers or session tokens.
+                Log.w(TAG, "Puente rechazado: type=" + type +
+                    " userId válido=" + userValid + " (longitud=" + user.length() + ")" +
+                    " techniqueId válido=" + techniqueValid + " (longitud=" + id.length() + ")");
+                // Reject the operation, but respond so React doesn't show
+                // a permanent 'Descargando...' state after a failed request.
+                if (id.length() > 0 && id.length() <= 128) {
+                    emit("ERROR", id, "missing",
+                        "No se inició la descarga: la ficha o el usuario tienen un identificador inválido.");
+                }
                 return;
             }
             if (type.equals("CHECK")) {
