@@ -1,0 +1,12 @@
+diff --git a/android-native/app/src/main/java/cl/alejandrino/nativeapp/MainActivity.java b/android-native/app/src/main/java/cl/alejandrino/nativeapp/MainActivity.java
+--- a/android-native/app/src/main/java/cl/alejandrino/nativeapp/MainActivity.java
++++ b/android-native/app/src/main/java/cl/alejandrino/nativeapp/MainActivity.java
+@@ -38,7 +38,7 @@
+ public final class MainActivity extends Activity {
+     private static final String TAG = "AlejandrinoNative";
+     private static final Pattern UUID_PATTERN = Pattern.compile(
+-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
++        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+     private WebView web;
+     private NativeFileIndex files;
+     private volatile boolean busy = false;

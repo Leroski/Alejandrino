@@ -1,55 +1,137 @@
-# Estabilización del puente Android
+# Estabilización de Alejandrino: INC-01
 
-## Rechazo de CHECK y DOWNLOAD
+Fecha: 6 de noviembre de 2026. Requisitos: ALE-SRS-001, secciones 8, 10, 12 y 14.
 
-En [MainActivity.java del PR #5](https://github.com/Leroski/Alejandrino/blob/feat/android-library-integration/android-native/app/src/main/java/cl/alejandrino/nativeapp/MainActivity.java#L39), Android exige bloques de longitud 8-4-4-4-4-12. Un UUID estándar usa 8-4-4-4-12. El patrón se aplica a ambos IDs antes de consultar el índice o iniciar una descarga. Esto explica por qué fallan los mensajes con IDs estándar, aunque el código fuente por sí solo no identifica el contenido exacto de los mensajes de una APK instalada.
+## Resultado y alcance de este incremento
 
-En la web, `TechniqueCard` pasa `technique.user_id` y `technique.id` a CHECK. La página Compartir pasa `user.id` de Supabase Auth y `confirmed.id` de la ficha insertada o encontrada a DOWNLOAD. El esquema en `main` declara ambos campos de la ficha como UUID.
+El rechazo de UUID se reproduce con el patrón real de `MainActivity.java`:
+exige **8-4-4-4-4-12**, seis grupos y 41 caracteres, en vez de **8-4-4-4-12**,
+cinco grupos y 36 caracteres. Rechaza tanto un `userId` como un `techniqueId`
+estándar; además acepta una cadena de seis grupos que no representa un UUID.
 
-### Reproducción sin APK ni cuenta
+La corrección aislada elimina el grupo adicional. No desactiva la validación,
+no admite ambos formatos ni cambia identificadores guardados. El formato textual
+se contrasta con [RFC 9562, sección 4](https://www.rfc-editor.org/rfc/rfc9562.html#section-4).
 
-Guardar como `AlejandrinoUuidProbe.java` y ejecutar `java AlejandrinoUuidProbe.java` con JDK 11 o superior. La segunda columna prueba el patrón del PR #5 y la tercera prueba la corrección propuesta.
+El PR #6 parte de `main`. Este incremento amplía su diagnóstico con una prueba
+ejecutable sobre el código real, un parche de una línea y CI reproducible.
+**No incorpora la APK experimental a `main` ni integra todavía la corrección en
+una APK instalada.** El parche se aplica únicamente a una copia aislada durante
+la prueba. Esto permite comprobar una hipótesis sin importar toda la cadena de PR.
 
-```java
-import java.util.UUID;
-import java.util.regex.Pattern;
+## Fuentes inspeccionadas
 
-class AlejandrinoUuidProbe {
-    public static void main(String[] args) {
-        var current = Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
-        var canonical = Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
-        for (var id : new String[] {
-            UUID.randomUUID().toString(),
-            "12345678-1234-1234-1234-1234-123456789abc",
-            ""
-        }) {
-            System.out.printf("%d %b %b%n", id.length(),
-                current.matcher(id).matches(), canonical.matcher(id).matches());
-        }
-    }
-}
+| Referencia | Commit | Alcance revisado |
+| --- | --- | --- |
+| `main` | `4a4b5ac2c5221ac5c70c52e5972f3e995c2ad7e9` | Web, guardado, esquema/RLS, metadatos y pruebas existentes. |
+| PR #3 | `7bce17ed83142081c248743f29eafd1c35f522f6` | Motor Python de descarga, pruebas de URLs y documentación de Termux. |
+| PR #4 | `b296ae9ea3ce0538c680097d72d52076ec079d87` | APK aislada: recepción de enlace, extracción, unión y publicación. |
+| PR #5 | `deff118ddc0a806a22decedf78ee0d41cb93cabc` | WebView, bridge, llamadas React, índice local, deduplicación y CI. |
+
+El defecto está en [MainActivity.java, línea 41](https://github.com/Leroski/Alejandrino/blob/deff118ddc0a806a22decedf78ee0d41cb93cabc/android-native/app/src/main/java/cl/alejandrino/nativeapp/MainActivity.java#L41).
+La misma expresión comprueba ambos campos antes de `CHECK`, `OPEN` y `DOWNLOAD`.
+`OPEN_EXTERNAL` retorna antes de esa comprobación; que llegue ese mensaje no
+demuestra que los otros tres funcionen.
+
+`TechniqueCard` envía `technique.user_id` y `technique.id`; `/compartir` envía
+`user.id` y el ID de la ficha confirmada. El SQL define ambos como `uuid`.
+Esto identifica un defecto suficiente para rechazar entradas correctas. No revela
+qué valores exactos recibió el teléfono ni descarta problemas adicionales.
+
+## Prueba reproducible
+
+Requiere Java con compilador de fuentes (JDK 17 o posterior) y Git. No necesita
+Android Studio, Android SDK, Supabase, tokens ni descargas de videos.
+
+Desde esta rama, con el commit de referencia disponible en el repositorio:
+
+```bash
+# Se crean dos copias temporales; el checkout actual y sus cambios no se editan.
+repo_root=$(git rev-parse --show-toplevel)
+uuid_check_dir=$(mktemp -d)
+source_path=android-native/app/src/main/java/cl/alejandrino/nativeapp/MainActivity.java
+mkdir -p "$uuid_check_dir/before/$(dirname "$source_path")"
+mkdir -p "$uuid_check_dir/after/$(dirname "$source_path")"
+git show "deff118ddc0a806a22decedf78ee0d41cb93cabc:$source_path" > "$uuid_check_dir/before/$source_path"
+cp "$uuid_check_dir/before/$source_path" "$uuid_check_dir/after/$source_path"
+
+bash scripts/check-native-uuid.sh "$uuid_check_dir/before/$source_path" --reproduce
+
+# Debe FALLAR con AssertionError: canonical representation 0.
+bash scripts/check-native-uuid.sh "$uuid_check_dir/before/$source_path"
+
+git -C "$uuid_check_dir/after" apply --check "$repo_root/fixes/INC-01-native-uuid.patch"
+git -C "$uuid_check_dir/after" apply "$repo_root/fixes/INC-01-native-uuid.patch"
+bash scripts/check-native-uuid.sh "$uuid_check_dir/after/$source_path"
 ```
+
+Si falta el commit, `git fetch origin deff118ddc0a806a22decedf78ee0d41cb93cabc`
+lo trae sin cambiar de rama. En CI, `bridge-contract.yml` obtiene ese mismo commit
+en un checkout separado, comprueba el fallo y aplica el parche allí.
+
+Resultado local observado con Java 21:
 
 ```text
-36 false true
-41 true false
-0 false false
+INC-01 reproduced: two valid 36-character IDs rejected; invalid 41-character ID accepted.
+AssertionError: canonical representation 0
+PASS: 52 UUID format checks. Session/ownership and Android routing are not tested here.
 ```
 
-## Qué recuperar
+Las 52 comprobaciones cubren representación canónica en distintas combinaciones
+de mayúsculas/minúsculas, IDs vacíos, longitudes incorrectas, sexto grupo,
+caracteres no hexadecimales, espacios, saltos de línea y caracteres Unicode
+parecidos. Cada entrada inválida se comprueba por separado como usuario y ficha.
+Nil/Max se aceptan solo como representaciones sintácticas: eso **no autoriza**
+ninguna operación ni acredita que exista la ficha o el usuario.
 
-| Base | Decisión |
-|---|---|
-| `main` | Conservar Next.js, Supabase Auth, RLS y el CRUD de fichas. |
-| PR #3 | Conservar el descargador por terminal como referencia y sus casos de prueba. Excluir Termux del recorrido normal. |
-| PR #4 | Recuperar el extractor, la mezcla con audio y la publicación en MediaStore como una unidad comprobable. La APK aislada ya produjo un MP4 según la prueba de traspaso. |
-| PR #5 | Recuperar por separado el transporte WebView y la consulta del índice. Corregir el validador y correlacionar cada solicitud con su respuesta. Tratar el índice de SharedPreferences como prototipo. |
+La prueba extrae y ejecuta el literal real con `java.util.regex.Pattern`; no
+traduce el patrón a JavaScript ni compila toda la Activity. Si el validador cambia
+de ubicación o deja de ser un literal, falla explícitamente y habrá que adaptar
+la prueba. No comprueba transporte JSON, respuestas, sesión, MediaStore ni APK.
 
-El origen WebView autorizado controla quién puede enviar mensajes al puente. La sesión autenticada y la propiedad de la ficha deben verificarse por separado antes de habilitar operaciones sobre archivos. La disponibilidad se calcula en el dispositivo. Supabase conserva las fichas y sus metadatos.
+## Qué se conserva y qué se reemplaza
 
-## Primera prueba de integración
+| Componente | Decisión para la estabilización |
+| --- | --- |
+| Web y Supabase de `main` | Conservar como base. Mantener RLS, edición con revisión, paginación y metadatos opcionales. |
+| Extracción y unión local demostradas en PR #4 | Recuperar después por partes, con pruebas de pistas y errores. No reescribir el motor que ya tuvo una prueba positiva en teléfono. |
+| Separación ficha sincronizada / MP4 local | Conservar. Ningún booleano global de disponibilidad ni subida de archivos locales. |
+| Regla UUID de PR #5 | Reemplazar por el formato correcto mediante el parche probado. |
+| Protocolo de mensajes sin correlación | Reemplazar en el siguiente incremento por solicitudes versionadas y respuestas por `requestId`. |
+| IDs enviados por JavaScript como autorización | No recuperar así: verificar sesión y propiedad antes de acceder al índice o descargar. |
+| Activity que concentra transporte, navegación y descarga | Separar gradualmente al importar; no copiar como nueva línea base de producto. |
+| Canonización/deduplicación de PR #5 | Tratar como referencia, no como garantía transaccional: `/p/ID` y `/reel/ID` aún pueden generar URLs distintas. |
+| PR #3, #4 y #5 | Conservar abiertos y sin fusionar; no borrar ramas, datos ni cambios locales. |
 
-1. Abrir en el Galaxy A07 una ficha real de la cuenta autenticada. Ejecutar solo CHECK con el validador corregido.
-2. Verificar que la respuesta correlacionada sea `missing` si la ficha carece de un archivo y `available` si la asociación existe y se puede leer.
-3. Repetir con IDs ausentes, de 41 caracteres y con un UUID bien formado de otra cuenta. Comprobar rechazo, error visible y ausencia de identificadores completos o tokens en Logcat.
-4. Tras validar CHECK, probar la descarga y reproducción de una ficha autorizada. Reiniciar la APK y verificar que la asociación persiste sin duplicar el MP4.
+## Arquitectura mínima propuesta
+
+1. **Dominio web existente:** ficha, clasificación, identidad de publicación y
+   persistencia Supabase. Un fallo de descarga conserva la ficha.
+2. **Adaptador del puente:** valida origen/documento principal, versión, acción,
+   IDs y correlación; delega la autorización y devuelve errores explícitos.
+3. **Autorización nativa:** verifica la sesión contra Supabase y consulta la ficha
+   con RLS. El usuario y la URL para la operación se obtienen de datos verificados.
+   Un UUID bien formado es solo una validación de entrada.
+4. **Medios locales:** servicio de descarga/unión y repositorio del índice, separados
+   de WebView. Disponibilidad comprobada por dispositivo, usuario y ficha.
+
+Se mantiene Next.js + Supabase + Android. No se decide todavía una migración a
+otro framework, Room o WorkManager dentro de este cambio acotado.
+
+## Criterios de aceptación y siguiente incremento
+
+Para este PR: se reproduce el fallo exacto en el commit fijado, el mismo contrato
+falla antes y pasa después del parche, solo cambia una línea del código Android,
+y la CI repite la prueba sin credenciales de aplicación. Una CI verde aquí no
+equivale a los casos TA-06/TA-09 completados.
+
+El siguiente PR debe recuperar un `CHECK` mínimo con `protocolVersion`,
+`requestId`, error visible y sesión/propiedad verificadas, **sin iniciar descargas**.
+Debe probar IDs ausentes, malformados y pertenecientes a otra cuenta, mensajes
+desconocidos, respuestas ajenas/tardías y falta de respuesta. Los logs de pruebas
+no deben contener tokens, identificadores completos ni enlaces privados.
+
+Después, el Galaxy A07 debe comprobar `CHECK → missing/available`, un rechazo
+visible y el regreso desde un enlace externo. Solo entonces se recupera el
+recorrido con una ficha: guardar, descargar, vincular, reproducir y reiniciar.
+La APK instalada, la autenticación nativa y ese recorrido permanecen pendientes.
