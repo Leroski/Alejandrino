@@ -54,8 +54,9 @@ npm audit --audit-level=moderate
 
 La compilación Android y su contrato se describen en
 [android-native/README.md](android-native/README.md). La CI de pull requests
-compila y prueba; distribuir una APK requiere además comprobar el origen web
-mediante la ejecución manual del workflow **Authenticated native CHECK**.
+compila y prueba. El workflow **Authenticated native CHECK** distribuye la APK
+al integrar cambios en `main` o ejecutarlo manualmente, después de comprobar que
+el dominio público `https://proyalejandrino.vercel.app` y la API CHECK funcionan.
 
 ## Arquitectura
 

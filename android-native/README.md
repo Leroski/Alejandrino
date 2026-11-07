@@ -16,10 +16,11 @@ un archivo real sigue pendiente junto con la recuperación/importación del índ
 
 Requiere JDK 17, Gradle 8.11.1 y Android SDK 35. Se puede abrir `android-native/`
 en Android Studio o usar la APK del workflow **Authenticated native CHECK**.
-Las ejecuciones de PR compilan y prueban, pero no distribuyen APK. Para distribuir,
-ejecutar manualmente el workflow con `web_origin`: primero verifica que la web
-y la API CHECK sean accesibles sin login de Vercel. Solo entonces genera el
-artefacto `alejandrino-check-debug`, que contiene `app-debug.apk`.
+Las ejecuciones de PR compilan y prueban, pero no distribuyen APK. Al integrar
+cambios en `main`, el workflow verifica que la web y la API CHECK del dominio
+público estén disponibles antes de publicar el artefacto `alejandrino-check-debug`,
+que contiene `app-debug.apk`. También se puede ejecutar manualmente con
+`web_origin`; en ese caso la verificación ocurre antes de compilar.
 
 También se puede verificar antes de compilar:
 
@@ -35,7 +36,7 @@ Para compilar localmente, desde `android-native/`:
 
 ```bash
 gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug \
-  -PALEJANDRINO_WEB_URL=https://proyalejandrino-git-stabilize-android-bridge-baseline-leroski.vercel.app
+  -PALEJANDRINO_WEB_URL=https://proyalejandrino.vercel.app
 ```
 
 En Android Studio, la misma propiedad se puede poner en el archivo local
@@ -44,11 +45,12 @@ en los argumentos de Gradle. La URL es configuración **de la APK**; no se
 configura en Supabase ni mediante una variable del servidor Vercel.
 `local.properties`, salidas de compilación y configuración del IDE no se versionan.
 
-La web y `/api/native/authorize` deben estar accesibles desde la APK. El 6/11/2026,
-la Preview de esta rama redirigía a login de Vercel. Esa protección debe resolverse
-para este dominio de prueba antes de validar el teléfono. La app no sigue esos
-redirects con el bearer token ni amplía los orígenes permitidos. No se cambiaron
-las opciones de acceso de Vercel en este incremento.
+La versión 0.3.1-check usa `https://proyalejandrino.vercel.app`, el dominio público
+estable. La APK 0.3.0 apuntaba a una Preview protegida y mostraba el error de
+acceso a otro dominio. La web y `/api/native/authorize` deben desplegarse en
+producción antes de distribuir la nueva APK. Se conserva la protección de las
+Previews y la autenticación Supabase. La app no sigue redirects de autorización
+con el bearer token ni amplía los orígenes permitidos.
 
 Una APK de CI y una compilada en tu Android Studio pueden tener firmas debug
 distintas. Para conservar la instalación de prueba entre actualizaciones, usa

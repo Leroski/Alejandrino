@@ -1,6 +1,9 @@
 name: Authenticated native CHECK
 
 on:
+  push:
+    branches: [main]
+    paths: ['android-native/**', 'app/**', 'tests/**', 'scripts/**', 'next.config.ts', 'package*.json', '.github/workflows/native-check.yml']
   pull_request:
     paths: ['android-native/**', 'app/**', 'tests/**', 'scripts/**', 'next.config.ts', 'package*.json', '.github/workflows/native-check.yml']
   workflow_dispatch:
@@ -9,7 +12,7 @@ on:
         description: 'Origen HTTPS público con la web y CHECK desplegados, sin tokens ni parámetros'
         required: true
         type: string
-        default: 'https://proyalejandrino-git-stabilize-android-bridge-baseline-leroski.vercel.app'
+        default: 'https://proyalejandrino.vercel.app'
 
 permissions:
   contents: read
@@ -36,7 +39,7 @@ jobs:
   android:
     runs-on: ubuntu-latest
     env:
-      WEB_ORIGIN: ${{ inputs.web_origin || 'https://proyalejandrino-git-stabilize-android-bridge-baseline-leroski.vercel.app' }}
+      WEB_ORIGIN: ${{ inputs.web_origin || 'https://proyalejandrino.vercel.app' }}
     defaults:
       run:
         working-directory: android-native
@@ -63,8 +66,18 @@ jobs:
         run: >-
           gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
           "-PALEJANDRINO_WEB_URL=$WEB_ORIGIN"
+      - name: Wait for public production before distributing an APK
+        if: github.event_name == 'push'
+        run: |
+          for attempt in {1..18}; do
+            if node ../scripts/check-apk-origin.cjs "$WEB_ORIGIN"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 18 ]; then sleep 10; fi
+          done
+          exit 1
       - uses: actions/upload-artifact@v4
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         with:
           name: alejandrino-check-debug
           path: android-native/app/build/outputs/apk/debug/app-debug.apk
