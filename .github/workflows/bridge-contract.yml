@@ -1,0 +1,47 @@
+name: Bridge UUID regression
+
+on:
+  pull_request:
+    paths:
+      - 'tests/android/**'
+      - 'scripts/check-native-uuid.sh'
+      - 'fixes/INC-01-native-uuid.patch'
+      - 'docs/diagnostico-bridge-android.md'
+      - '.github/workflows/bridge-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  uuid-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Read the exact failing integration snapshot
+        uses: actions/checkout@v4
+        with:
+          ref: deff118ddc0a806a22decedf78ee0d41cb93cabc
+          path: .bridge-reference
+          sparse-checkout: android-native/app/src/main/java/cl/alejandrino/nativeapp
+          persist-credentials: false
+      - name: Reproduce INC-01 on the unchanged Java pattern
+        run: |
+          source_file=.bridge-reference/android-native/app/src/main/java/cl/alejandrino/nativeapp/MainActivity.java
+          bash scripts/check-native-uuid.sh "$source_file" --reproduce
+          if bash scripts/check-native-uuid.sh "$source_file"; then
+            echo 'The historical source unexpectedly passed the corrected contract.' >&2
+            exit 1
+          fi
+      - name: Apply the one-line correction only to the isolated snapshot
+        run: |
+          git -C .bridge-reference apply --check "$GITHUB_WORKSPACE/fixes/INC-01-native-uuid.patch"
+          git -C .bridge-reference apply "$GITHUB_WORKSPACE/fixes/INC-01-native-uuid.patch"
+      - name: Validate the corrected pattern with Java
+        run: bash scripts/check-native-uuid.sh .bridge-reference/android-native/app/src/main/java/cl/alejandrino/nativeapp/MainActivity.java

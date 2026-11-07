@@ -1,0 +1,84 @@
+name: Authenticated native CHECK
+
+on:
+  push:
+    branches: [main]
+    paths: ['android-native/**', 'app/**', 'tests/**', 'scripts/**', 'next.config.ts', 'package*.json', '.github/workflows/native-check.yml']
+  pull_request:
+    paths: ['android-native/**', 'app/**', 'tests/**', 'scripts/**', 'next.config.ts', 'package*.json', '.github/workflows/native-check.yml']
+  workflow_dispatch:
+    inputs:
+      web_origin:
+        description: 'Origen HTTPS público con la web y CHECK desplegados, sin tokens ni parámetros'
+        required: true
+        type: string
+        default: 'https://proyalejandrino.vercel.app'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/*.test.cjs
+      - run: npx eslint app
+      - run: npx tsc --noEmit
+      - run: npm run build
+
+  android:
+    runs-on: ubuntu-latest
+    env:
+      WEB_ORIGIN: ${{ inputs.web_origin || 'https://proyalejandrino.vercel.app' }}
+    defaults:
+      run:
+        working-directory: android-native
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify deployed origin before distributing an APK
+        if: github.event_name == 'workflow_dispatch'
+        run: node ../scripts/check-apk-origin.cjs "$WEB_ORIGIN"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Check the UUID validator used by this APK
+        run: bash ../scripts/check-native-uuid.sh
+      - name: Test, lint and build the CHECK-only APK
+        run: >-
+          gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+          "-PALEJANDRINO_WEB_URL=$WEB_ORIGIN"
+      - name: Wait for public production before distributing an APK
+        if: github.event_name == 'push'
+        run: |
+          for attempt in {1..18}; do
+            if node ../scripts/check-apk-origin.cjs "$WEB_ORIGIN"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 18 ]; then sleep 10; fi
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: alejandrino-check-debug
+          path: android-native/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

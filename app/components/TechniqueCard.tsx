@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { cleanField, isPending, type Technique } from "../types/technique";
+import LocalVideoStatus from "./LocalVideoStatus";
+import { useNativeAndroid } from "../lib/native-bridge";
 
 import { metadataMessage, safeThumbnail, type VideoMetadata } from "../types/video-metadata";
 
@@ -28,6 +30,7 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
   const [draft, setDraft] = useState<Technique | null>(null);
   const [error, setError] = useState("");
   const [brokenThumbnail, setBrokenThumbnail] = useState("");
+  const native = useNativeAndroid();
   const thumbnail = safeThumbnail(metadata?.thumbnail_url);
   const previewMessage = metadataBusy ? "Buscando información del video…" : metadataMessage(metadata);
   const pending = isPending(technique);
@@ -53,7 +56,7 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
       </div>
       <div className="flex min-w-0 items-start gap-3">
         {thumbnail && brokenThumbnail !== `${thumbnail}:${metadata?.attempted_at}` && (
-          <a href={technique.url} target="_blank" rel="noopener noreferrer" aria-label="Abrir video original"
+          <a href={technique.url} target={native ? "_self" : "_blank"} rel="noopener noreferrer" aria-label="Abrir video original"
             className="h-24 w-20 shrink-0 overflow-hidden rounded-xl bg-zinc-800 sm:w-28">
             {/* URL pública del proveedor; no pasa por un optimizador ni se almacena aquí. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -78,8 +81,9 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
         </button>}
       <p className="mt-1 truncate text-sm text-zinc-400" title={technique.url}>{technique.url}</p>
       {labels.length > 0 && <p className="mt-3 break-words text-sm text-zinc-300">{labels.join(" · ")}</p>}
+      <LocalVideoStatus key={`${technique.user_id}:${technique.id}`} userId={technique.user_id} techniqueId={technique.id} disabled={disabled} />
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <a href={technique.url} target="_blank" rel="noopener noreferrer"
+        <a href={technique.url} target={native ? "_self" : "_blank"} rel="noopener noreferrer"
           className={`${button} bg-red-600 text-center text-white hover:bg-red-500`}>Ver video</a>
         <button type="button" disabled={disabled} aria-expanded={!!draft} aria-controls={`edit-${technique.id}`}
           className={`${button} bg-zinc-800 hover:bg-zinc-700`}

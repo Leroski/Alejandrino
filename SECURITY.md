@@ -13,7 +13,7 @@ tokens personales ni claves de firma en variables `NEXT_PUBLIC_*` o en la APK.
 Guardar los valores de despliegue en su proveedor y mantener `.env.local` fuera
 de Git. `.env.example` contiene únicamente marcadores de posición.
 
-La APK CHECK del PR #6 (todavía fuera de `main`) verifica la cuenta y la ficha antes de leer el índice local. No
+La APK CHECK verifica la cuenta y la ficha antes de leer el índice local. No
 sube archivos multimedia. Su puente admite un único origen HTTPS y no sigue
 redirecciones de autorización con el token. Las ramas `feat/android-*` y sus
 APK históricas son prototipos: no utilizarlas como una versión estable.
@@ -25,7 +25,7 @@ esta APK. Hacer público el repositorio no cambia esa protección. Configurar un
 dominio accesible que conserve la autenticación de Supabase; nunca incrustar
 un token de bypass de Vercel en el código, la URL, Gradle o la APK.
 
-En la rama Android, antes de distribuir una compilación:
+Antes de distribuir una compilación:
 
 ```bash
 node scripts/check-apk-origin.cjs https://DOMINIO_CONFIGURADO
