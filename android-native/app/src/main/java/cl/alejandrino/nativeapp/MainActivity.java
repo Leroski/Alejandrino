@@ -22,22 +22,56 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
-/** CHECK-only shell: no downloader, file writes, or unverified index access. */
+/** Fixed-origin shell. Every media operation verifies session and ownership first. */
 public final class MainActivity extends Activity {
     private final ThreadPoolExecutor workers = new ThreadPoolExecutor(2, 2, 0, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(6));
     private WebView web;
     private FrameLayout webContainer;
     private AllowedOrigin origin;
     private NativeCheckService checks;
+    private NativeMediaService media;
+    private static boolean recovered;
+    private final AtomicReference<MediaOperation> activeMedia = new AtomicReference<>();
+    private static final class MediaOperation {
+        final JSONObject identity;
+        final String action;
+        final DownloadGuard guard;
+        MediaOperation(JSONObject input) throws Exception {
+            action = input.getString("type");
+            identity = NativeCheckService.envelope(input, action);
+            guard = new DownloadGuard("DOWNLOAD".equals(action) ? 600000 : 20000);
+        }
+        boolean matches(JSONObject input) {
+            for (String key : new String[] {"requestId", "userId", "techniqueId"})
+                if (!identity.optString(key).equals(input.optString(key))) return false;
+            return input.optInt("protocolVersion") == 1;
+        }
+    }
     private int documentGeneration;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         try {
             origin = new AllowedOrigin(BuildConfig.ALEJANDRINO_WEB_URL);
-            checks = new NativeCheckService(new NativeAuthorizer(origin), new LocalFileIndex(this));
+            LocalFileIndex index = new LocalFileIndex(this);
+            if (!recovered) { index.recoverIncomplete(); recovered = true; }
+            NativeAuthorizer authorizer = new NativeAuthorizer(origin);
+            checks = new NativeCheckService(authorizer, index);
+            media = new NativeMediaService(authorizer, new AndroidMediaFiles(this, index, (uri, guard) -> {
+                FutureTask<Void> open = new FutureTask<>(() -> {
+                    guard.ensureActive();
+                    if (isFinishing() || isDestroyed()) throw new NativeCheckService.Failure("OPEN_FAILED");
+                    startActivity(new Intent(this, PlaybackActivity.class).putExtra("localVideo", uri.toString()));
+                    return null;
+                });
+                runOnUiThread(open);
+                try { open.get(5, TimeUnit.SECONDS); }
+                catch (Exception error) { guard.cancel(); open.cancel(false); throw new NativeCheckService.Failure("OPEN_FAILED"); }
+            }));
         } catch (Exception invalid) {
             showError("Falta configurar el origen HTTPS de Alejandrino al compilar esta APK."); return;
         }
@@ -57,7 +91,7 @@ public final class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
-                documentGeneration++;
+                documentGeneration++; cancelMedia(false);
                 if (!origin.allows(url)) { view.stopLoading(); showError("El despliegue cambió de dominio. Revisa su acceso en Vercel."); }
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
@@ -99,6 +133,54 @@ public final class MainActivity extends Activity {
                     reply.postMessage(NativeCheckService.error(input, "BUSY").toString());
                 }
             });
+        WebViewCompat.addWebMessageListener(web, "AlejandrinoMediaV1", Collections.singleton(origin.value),
+            (view, message, source, mainFrame, reply) -> {
+                if (!mainFrame || !origin.allows(source.toString()) || message.getType() != WebMessageCompat.TYPE_STRING) return;
+                String raw = message.getData();
+                JSONObject input = new JSONObject();
+                try {
+                    if (raw == null || raw.length() > 12288) throw new Exception();
+                    input = new JSONObject(raw);
+                } catch (Exception invalid) { reply.postMessage(NativeMediaService.error(input, "DOWNLOAD", "BAD_REQUEST").toString()); return; }
+                if ("CANCEL".equals(input.opt("type"))) {
+                    MediaOperation current = activeMedia.get();
+                    if (current != null && current.matches(input)) current.guard.cancel();
+                    return;
+                }
+                MediaOperation operation;
+                try {
+                    String action = input.getString("type");
+                    if (!"DOWNLOAD".equals(action) && !"OPEN".equals(action)) throw new NativeCheckService.Failure("UNSUPPORTED_ACTION");
+                    NativeCheckService.validate(input, action);
+                    operation = new MediaOperation(input);
+                } catch (Exception invalid) {
+                    reply.postMessage(NativeMediaService.error(input, input.optString("type", "DOWNLOAD"),
+                        invalid instanceof NativeCheckService.Failure ? ((NativeCheckService.Failure) invalid).code : "BAD_REQUEST").toString()); return;
+                }
+                if (!activeMedia.compareAndSet(null, operation)) {
+                    reply.postMessage(NativeMediaService.error(operation.identity, operation.action, "BUSY").toString()); return;
+                }
+                web.setKeepScreenOn("DOWNLOAD".equals(operation.action));
+                final int generation = documentGeneration;
+                java.util.function.Consumer<JSONObject> post = response -> runOnUiThread(() -> {
+                    if (web != null && generation == documentGeneration && origin.allows(web.getUrl())) reply.postMessage(response.toString());
+                });
+                try {
+                    workers.execute(() -> {
+                        try { post.accept(media.handle(raw, operation.guard, post)); }
+                        finally {
+                            activeMedia.compareAndSet(operation, null);
+                            runOnUiThread(() -> {
+                                MediaOperation current = activeMedia.get();
+                                if (web != null) web.setKeepScreenOn(current != null && "DOWNLOAD".equals(current.action));
+                            });
+                        }
+                    });
+                } catch (RejectedExecutionException busy) {
+                    activeMedia.compareAndSet(operation, null); web.setKeepScreenOn(false);
+                    post.accept(NativeMediaService.error(operation.identity, operation.action, "BUSY"));
+                }
+            });
         setContentView(webContainer);
         navigate(getIntent());
     }
@@ -136,8 +218,13 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (web != null && web.canGoBack()) web.goBack(); else super.onBackPressed();
     }
+    private void cancelMedia(boolean downloadsOnly) {
+        MediaOperation current = activeMedia.get();
+        if (current != null && (!downloadsOnly || "DOWNLOAD".equals(current.action))) current.guard.cancel();
+    }
+    @Override protected void onStop() { cancelMedia(true); super.onStop(); }
     @Override protected void onDestroy() {
-        documentGeneration++; workers.shutdownNow();
+        documentGeneration++; cancelMedia(false); workers.shutdownNow();
         if (web != null) { web.destroy(); web = null; }
         super.onDestroy();
     }

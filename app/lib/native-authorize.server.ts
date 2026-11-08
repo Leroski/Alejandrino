@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../types/technique";
-import { isUuid, NativeCheckError, parseCheckRequest, type CheckRequest, type NativeErrorCode } from "./native-protocol";
+import { isUuid, NativeCheckError, type NativeErrorCode } from "./native-protocol";
+import { downloadSource, parseAuthorizedRequest, type AuthorizedRequest } from "./native-media-protocol";
 
 type ClientFactory = (authorization: string) => SupabaseClient<Database>;
 function createUserClient(authorization: string) {
@@ -15,15 +16,18 @@ function createUserClient(authorization: string) {
 }
 
 export async function authorizeNativeCheck(request: Request, createDb: ClientFactory = createUserClient): Promise<Response> {
-  let identity: Partial<CheckRequest> = {};
+  let identity: Partial<AuthorizedRequest> = {};
+  let source: string | null = null;
   function reply(type: "AUTHORIZED" | "ERROR", status: number, errorCode?: NativeErrorCode) {
     return Response.json({ protocolVersion: 1, requestId: identity.requestId ?? "",
       userId: identity.userId ?? "", techniqueId: identity.techniqueId ?? "", type,
+      ...(identity.type && identity.type !== "CHECK" ? { action: identity.type } : {}),
+      ...(type === "AUTHORIZED" && identity.type === "DOWNLOAD" ? { sourceUrl: source } : {}),
       ...(errorCode ? { errorCode } : {}) }, {
       status, headers: { "Cache-Control": "private, no-store", "Vary": "Authorization" },
     });
   }
-  let message: CheckRequest;
+  let message: AuthorizedRequest;
   try {
     const reader = request.body?.getReader();
     if (!reader) throw new NativeCheckError("BAD_REQUEST");
@@ -42,7 +46,7 @@ export async function authorizeNativeCheck(request: Request, createDb: ClientFac
     if (value && typeof value === "object" && "requestId" in value && isUuid(value.requestId)) {
       identity = { requestId: value.requestId };
     }
-    message = parseCheckRequest(value);
+    message = parseAuthorizedRequest(value);
     identity = message;
   } catch (cause) {
     return reply("ERROR", 400, cause instanceof NativeCheckError ? cause.code : "BAD_REQUEST");
@@ -58,10 +62,14 @@ export async function authorizeNativeCheck(request: Request, createDb: ClientFac
     if (error || !user || !isUuid(user.id)) return reply("ERROR", 401, "AUTH_REQUIRED");
     if (user.id.toLowerCase() !== message.userId) return reply("ERROR", 403, "SESSION_MISMATCH");
     const { data: row, error: queryError } = await db.from("techniques")
-      .select("id,user_id").eq("id", message.techniqueId).eq("user_id", user.id).maybeSingle();
+      .select("id,user_id,url").eq("id", message.techniqueId).eq("user_id", user.id).maybeSingle();
     if (queryError) return reply("ERROR", 503, "UNAVAILABLE");
     // RLS is used with this user's bearer token, never a service_role key.
     if (!row || row.id !== message.techniqueId || row.user_id !== user.id) return reply("ERROR", 404, "NOT_FOUND");
+    if (message.type === "DOWNLOAD") {
+      source = downloadSource(row.url);
+      if (!source) return reply("ERROR", 422, "SOURCE_UNSUPPORTED");
+    }
     return reply("AUTHORIZED", 200);
   } catch { return reply("ERROR", 503, "UNAVAILABLE"); }
 }

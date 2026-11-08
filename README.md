@@ -10,15 +10,15 @@ encontrarlos después y clasificarlos por disciplina, posición y categoría.
 - Detección de enlaces repetidos e importación de la biblioteca local anterior.
 - Recepción de enlaces compartidos desde Android.
 - Metadatos de TikTok y YouTube mediante oEmbed, sin ejecutar el HTML recibido.
-- APK de prueba CHECK: consulta si una ficha tiene un archivo local después de
-  verificar la sesión y la propiedad de la ficha.
+- APK Android de prueba: CHECK autenticado, descarga de publicaciones de Instagram
+  y TikTok al dispositivo y reproducción local desde la ficha.
 
-**Estado:** proyecto en desarrollo. La APK CHECK se instala como
-**Alejandrino prueba** y tiene un índice separado de las APK experimentales.
-En una instalación limpia se espera «No descargado en este dispositivo».
-La descarga y reproducción integrada, la importación del índice y el recorrido
-completo en Galaxy A07 siguen pendientes. Los prototipos de descarga se
-conservan en ramas experimentales; no son una versión de producción.
+**Estado:** proyecto en desarrollo. CHECK fue validado en Galaxy A07. La fase
+multimedia 0.4.0 incorpora descarga y reproducción y requiere aceptación en ese
+mismo teléfono. Se busca calidad cercana a 720p con audio; depende de la fuente.
+La descarga requiere mantener la app visible. La biblioteca offline, descargas
+persistentes en segundo plano y recuperación/importación del índice siguen
+pendientes. Los prototipos anteriores se conservan en ramas experimentales.
 
 ## Desarrollo local
 
@@ -54,19 +54,19 @@ npm audit --audit-level=moderate
 
 La compilación Android y su contrato se describen en
 [android-native/README.md](android-native/README.md). La CI de pull requests
-compila y prueba. El workflow **Authenticated native CHECK** distribuye la APK
+compila y prueba. El workflow **Authenticated native media** distribuye la APK
 al integrar cambios en `main` o ejecutarlo manualmente, después de comprobar que
-el dominio público `https://proyalejandrino.vercel.app` y la API CHECK funcionan.
+el dominio público `https://proyalejandrino.vercel.app` y las acciones CHECK, DOWNLOAD y OPEN están desplegadas.
 
 ## Arquitectura
 
 - Next.js, React y TypeScript para la interfaz y las rutas del servidor.
 - Supabase Auth y PostgreSQL con RLS para las fichas de cada cuenta.
-- WebView Android, puente versionado y MediaStore para comprobar archivos locales.
+- WebView Android, puente versionado, yt-dlp, FFmpeg y MediaStore para archivos locales.
 - Vercel para el despliegue web; GitHub Actions para pruebas y compilación.
 
-Los videos locales no se suben a Supabase ni a Vercel. La verificación CHECK
-actual necesita conexión; no se declara soporte completo sin conexión.
+Los videos locales no se suben a Supabase ni a Vercel. La autorización de las operaciones
+actuales necesita conexión; no se declara soporte completo sin conexión.
 
 ## Documentación
 

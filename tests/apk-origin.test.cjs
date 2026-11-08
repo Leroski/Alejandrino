@@ -42,3 +42,18 @@ test("rechaza API ausente, login HTML, acceso sin sesión y respuesta no vincula
       ? new Response("<html/>", { headers: { "content-type": "text/html" } }) : reply()));
   }
 });
+
+test('la APK multimedia exige las tres acciones desplegadas y correlacionadas', async () => {
+  const actions = [];
+  const fetcher = async (_url, options) => {
+    if (!options.method) return new Response('<html></html>', {headers:{'Content-Type':'text/html'}});
+    const request = JSON.parse(options.body); actions.push(request.type);
+    return Response.json({...request, type:'ERROR', errorCode:'AUTH_REQUIRED', ...(request.type !== 'CHECK' ? {action:request.type} : {})}, {status:401});
+  };
+  assert.equal(await checkApkOrigin('https://app.example',fetcher,{media:true}), 'https://app.example');
+  assert.deepEqual(actions,['CHECK','DOWNLOAD','OPEN']);
+  await assert.rejects(checkApkOrigin('https://app.example',async(url,options)=>{
+    if (options.body && JSON.parse(options.body).type === 'DOWNLOAD') return Response.json({errorCode:'UNSUPPORTED_ACTION'},{status:400});
+    return fetcher(url,options);
+  },{media:true}));
+});
