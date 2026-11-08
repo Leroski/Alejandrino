@@ -8,7 +8,7 @@ const ts = require("typescript");
 const root = path.resolve(__dirname, "..");
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "alejandrino-check-"));
 fs.symlinkSync(path.join(root, "node_modules"), path.join(temp, "node_modules"), "junction");
-for (const name of ["native-protocol", "native-check-client", "native-authorize.server"]) {
+for (const name of ["native-protocol", "native-media-protocol", "native-check-client", "native-authorize.server"]) {
   fs.writeFileSync(path.join(temp, name + ".js"), ts.transpileModule(
     fs.readFileSync(path.join(root, "app/lib", name + ".ts"), "utf8"),
     { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText);
@@ -47,7 +47,7 @@ test("autoriza con Auth remoto, consulta RLS del mismo usuario y no devuelve el 
   assert.equal(result.headers.get("cache-control"), "private, no-store");
   assert.equal(result.headers.get("vary"), "Authorization");
   assert.deepEqual(db.calls, [["authorization", "Bearer " + token], ["getUser", token],
-    ["from", "techniques"], ["select", "id,user_id"], ["eq", "id", request.techniqueId], ["eq", "user_id", request.userId]]);
+    ["from", "techniques"], ["select", "id,user_id,url"], ["eq", "id", request.techniqueId], ["eq", "user_id", request.userId]]);
 });
 
 test("IDs vacíos, ausentes, falsos y mensajes no admitidos se rechazan antes de consultar Auth", async () => {
@@ -61,7 +61,7 @@ test("IDs vacíos, ausentes, falsos y mensajes no admitidos se rechazan antes de
     const missing = { ...request }; delete missing[field];
     assert.equal((await authorizeNativeCheck(http(missing), () => assert.fail())).status, 400);
   }
-  for (const [body, code] of [[{ ...request, type: "DOWNLOAD" }, "UNSUPPORTED_ACTION"],
+  for (const [body, code] of [[{ ...request, type: "DELETE_LOCAL" }, "UNSUPPORTED_ACTION"],
     [{ ...request, protocolVersion: "1" }, "UNSUPPORTED_VERSION"], [{ ...request, protocolVersion: 2 }, "UNSUPPORTED_VERSION"]]) {
     assert.equal((await (await authorizeNativeCheck(http(body), () => assert.fail())).json()).errorCode, code);
   }

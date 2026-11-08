@@ -13,7 +13,9 @@ tokens personales ni claves de firma en variables `NEXT_PUBLIC_*` o en la APK.
 Guardar los valores de despliegue en su proveedor y mantener `.env.local` fuera
 de Git. `.env.example` contiene únicamente marcadores de posición.
 
-La APK CHECK verifica la cuenta y la ficha antes de leer el índice local. No
+La APK verifica la cuenta y la ficha antes de CHECK, DOWNLOAD y OPEN; verifica
+de nuevo antes de publicar una descarga. La URL procede de la ficha autorizada.
+Los MP4 quedan en Download/Alejandrino y son visibles en el teléfono. No
 sube archivos multimedia. Su puente admite un único origen HTTPS y no sigue
 redirecciones de autorización con el token. Las ramas `feat/android-*` y sus
 APK históricas son prototipos: no utilizarlas como una versión estable.
@@ -28,10 +30,10 @@ un token de bypass de Vercel en el código, la URL, Gradle o la APK.
 Antes de distribuir una compilación:
 
 ```bash
-node scripts/check-apk-origin.cjs https://DOMINIO_CONFIGURADO
+node scripts/check-apk-origin.cjs https://DOMINIO_CONFIGURADO --media
 ```
 
-La comprobación exige una página accesible y que la API CHECK rechace una
+La comprobación exige una página accesible y que cada acción de la API rechace una
 solicitud sin sesión con el contrato esperado. Usa IDs sintéticos y no escribe
 en Supabase. No reemplaza la prueba con sesión y dispositivo reales.
 

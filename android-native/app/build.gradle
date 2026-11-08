@@ -1,6 +1,9 @@
 import groovy.json.JsonOutput
 
-plugins { id 'com.android.application' }
+plugins {
+    id 'com.android.application'
+    id 'com.chaquo.python'
+}
 
 android {
     namespace 'cl.alejandrino.nativeapp'
@@ -9,14 +12,18 @@ android {
         applicationId 'cl.alejandrino.nativeapp'
         minSdk 29
         targetSdk 35
-        versionCode 3
-        versionName '0.3.1-check'
+        versionCode 4
+        versionName '0.4.0-media'
+        ndk { abiFilters 'arm64-v8a' }
         buildConfigField 'String', 'ALEJANDRINO_WEB_URL', JsonOutput.toJson(project.findProperty('ALEJANDRINO_WEB_URL') ?: '')
     }
     buildFeatures { buildConfig true }
     buildTypes {
         debug { applicationIdSuffix '.check' }
-        release { minifyEnabled false }
+        release {
+            applicationIdSuffix '.check'
+            minifyEnabled false
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -24,7 +31,16 @@ android {
     }
 }
 
+chaquopy {
+    defaultConfig {
+        version = '3.10'
+        pip { install 'yt-dlp==2026.8.19' }
+    }
+}
+
 dependencies {
+    implementation 'dev.ffmpegkit-maintained:ffmpeg-kit-min:8.1.9'
+    implementation 'com.arthenica:smart-exception-java:0.2.1'
     implementation 'androidx.webkit:webkit:1.14.0'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'

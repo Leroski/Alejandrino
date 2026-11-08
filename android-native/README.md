@@ -1,129 +1,117 @@
-# Alejandrino: APK de comprobación local
+# Alejandrino: descarga y reproducción local · 0.4.0
 
-Esta versión permite abrir la biblioteca, compartir/guardar enlaces y pulsar
-**Comprobar video local** en una ficha. Solo implementa `CHECK`: no descarga,
-reproduce, importa ni modifica archivos. El descargador experimental se conserva
-en los PR #3–#5 y se recuperará después de validar esta consulta en teléfono.
+La APK **Alejandrino prueba** permite guardar/consultar fichas, descargar una
+publicación de Instagram o TikTok y reproducir su MP4 desde la misma ficha.
+La APK 0.3.1 continúa funcionando con CHECK; las nuevas acciones solo aparecen
+cuando existe el puente `AlejandrinoMediaV1` de la versión 0.4.0.
 
-La variante debug se instala como **Alejandrino prueba**, con paquete
-`cl.alejandrino.nativeapp.check`, separado de la APK anterior. Por ello **no
-comparte su índice ni hereda asociaciones de videos**. En una instalación limpia,
-una ficha autorizada debe devolver «No descargado en este dispositivo».
-`available` se prueba automáticamente con un índice simulado; su validación con
-un archivo real sigue pendiente junto con la recuperación/importación del índice.
+## Uso y límites de esta fase
 
-## Compilar e instalar
+1. Compartir un reel hacia Alejandrino y guardar/encontrar su ficha.
+2. Pulsar **Descargar al dispositivo**. Mantener la app visible hasta terminar.
+3. Pulsar **Reproducir video local**. El enlace original sigue disponible aparte.
+4. Reiniciar la app y pulsar **Comprobar video local**: debe conservar la asociación.
 
-Requiere JDK 17, Gradle 8.11.1 y Android SDK 35. Se puede abrir `android-native/`
-en Android Studio o usar la APK del workflow **Authenticated native CHECK**.
-Las ejecuciones de PR compilan y prueban, pero no distribuyen APK. Al integrar
-cambios en `main`, el workflow verifica que la web y la API CHECK del dominio
-público estén disponibles antes de publicar el artefacto `alejandrino-check-debug`,
-que contiene `app-debug.apk`. También se puede ejecutar manualmente con
-`web_origin`; en ese caso la verificación ocurre antes de compilar.
+Una única operación multimedia puede ejecutarse a la vez. Salir de la app,
+bloquear el teléfono, cambiar de cuenta o cancelar detiene la descarga. El límite
+es diez minutos y 256 MiB de pistas; no se reanudan tareas en segundo plano.
+La pantalla permanece encendida mientras se descarga con la app visible.
 
-También se puede verificar antes de compilar:
+Se busca una resolución cercana a 720p sin recodificar. Se muestra la resolución
+real cuando termina. Se exige un MP4 con imagen y audio; si el proveedor requiere
+login, no ofrece formatos compatibles o falla, se informa el error y se conserva
+la ficha. No se importan cookies ni se evaden restricciones del proveedor.
+YouTube, importación de archivos y biblioteca offline quedan para otra fase.
+La verificación de cuenta/ficha requiere conexión, también antes de abrir el
+reproductor local; el archivo audiovisual no se transmite a ningún servidor.
 
-```bash
-node scripts/check-apk-origin.cjs https://DOMINIO_CONFIGURADO
-```
+## Contratos y aislamiento
 
-Esta prueba no usa credenciales ni escribe en Supabase. Rechaza redirects, HTML
-de login y una API que acepte peticiones sin sesión. No acredita una sesión
-real ni la instalación en teléfono.
+- `AlejandrinoBridgeV1`: CHECK, compatible con 0.3.1.
+- `AlejandrinoMediaV1`: DOWNLOAD, OPEN y CANCEL. Mismo origen HTTPS exacto y
+  frame principal. Todas las respuestas incluyen versión, acción, requestId,
+  userId y techniqueId. La web descarta respuestas tardías o de otra cuenta.
+- DOWNLOAD/OPEN envían el token únicamente al endpoint fijo
+  `/api/native/authorize`. El servidor verifica `auth.getUser`, cuenta y ficha
+  usando RLS y la clave Publishable; no utiliza `service_role`.
+- La URL de descarga se obtiene de la ficha verificada en Supabase. La APK no
+  acepta una URL ni una ruta de archivo enviadas por JavaScript.
+- Antes de publicar el resultado se vuelven a verificar sesión, propiedad y URL.
+  El token permanece en memoria durante la operación, sin logs ni persistencia.
+- El índice privado usa usuario:ficha. Una copia existente evita otra descarga.
+  Solo se marca disponible tras validar imagen/audio, cerrar la escritura,
+  comprobar el tamaño, publicar MediaStore y persistir la asociación.
+- Los archivos nuevos usan `IS_PENDING`. Un registro local permite limpiar una
+  publicación interrumpida al volver a iniciar el proceso. Los errores revierten
+  solamente el archivo nuevo de esa operación; nunca borran la ficha Supabase.
+- Los MP4 quedan en **Download/Alejandrino**; son archivos visibles en el teléfono.
+  El aislamiento entre cuentas de la app no cifra ni oculta estos MP4 a su dueño.
+- OPEN inicia un reproductor interno no exportado. No devuelve URIs ni bytes a
+  JavaScript. La APK no necesita permisos generales de almacenamiento.
 
-Para compilar localmente, desde `android-native/`:
+## Compilación y pruebas
 
-```bash
-gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug \
-  -PALEJANDRINO_WEB_URL=https://proyalejandrino.vercel.app
-```
-
-En Android Studio, la misma propiedad se puede poner en el archivo local
-`~/.gradle/gradle.properties` como `ALEJANDRINO_WEB_URL=https://...`, o pasarla
-en los argumentos de Gradle. La URL es configuración **de la APK**; no se
-configura en Supabase ni mediante una variable del servidor Vercel.
-`local.properties`, salidas de compilación y configuración del IDE no se versionan.
-
-La versión 0.3.1-check usa `https://proyalejandrino.vercel.app`, el dominio público
-estable. La APK 0.3.0 apuntaba a una Preview protegida y mostraba el error de
-acceso a otro dominio. La web y `/api/native/authorize` deben desplegarse en
-producción antes de distribuir la nueva APK. Se conserva la protección de las
-Previews y la autenticación Supabase. La app no sigue redirects de autorización
-con el bearer token ni amplía los orígenes permitidos.
-
-Una APK de CI y una compilada en tu Android Studio pueden tener firmas debug
-distintas. Para conservar la instalación de prueba entre actualizaciones, usa
-el mismo origen de compilación/firma. La APK principal queda aparte.
-
-## Contrato y autorización
-
-El objeto inyectado es `window.AlejandrinoBridgeV1`. Solo se expone al origen HTTPS
-configurado. Se rechazan mensajes de subframes. Cada petición lleva:
-
-```json
-{
-  "protocolVersion": 1,
-  "requestId": "550e8400-e29b-41d4-a716-446655440000",
-  "type": "CHECK",
-  "userId": "123e4567-e89b-42d3-a456-426614174000",
-  "techniqueId": "019321ab-cdef-7abc-8def-0123456789ab",
-  "accessToken": "token-de-sesion-transitorio"
-}
-```
-
-Los identificadores del ejemplo son sintéticos; el token debe obtenerse de la
-sesión Supabase. No pegar tokens reales en documentación, capturas ni Logcat.
-
-1. Android valida versión, acción, formato de IDs y tamaño del mensaje.
-2. Android llama por HTTPS a `/api/native/authorize` **del origen configurado**.
-   Envía el token solo en `Authorization: Bearer ...`, sin persistirlo.
-3. El servidor verifica el token mediante `auth.getUser(token)`. Compara el usuario
-   verificado con el solicitado y consulta la ficha bajo RLS y ese mismo token.
-   Solo utiliza la clave pública del proyecto; no usa `service_role`.
-4. Android exige que la respuesta `AUTHORIZED` coincida con versión, solicitud,
-   usuario y ficha. Solo entonces lee el índice local y comprueba que el archivo
-   MediaStore es accesible y contiene datos.
-5. La respuesta usa `JavaScriptReplyProxy`: `AVAILABILITY` con `missing/available`
-   o `ERROR` con un código. Nunca incluye URI, bytes del archivo ni el token.
-
-El protocolo anterior sin versión no se usa. Se permiten ocho consultas en vuelo;
-hay tiempos límite en cliente y red. Los errores no se presentan como `missing`.
-Cambiar de cuenta/desmontar la ficha cancela la espera y descarta respuestas tardías.
-Navegar a otro documento invalida las respuestas nativas de la página anterior.
-
-La verificación requiere conexión. Esta versión no implementa biblioteca offline.
-El servidor autoriza la consulta; la disponibilidad se calcula exclusivamente en
-Android. No se envía información del índice ni contenido multimedia al servidor.
-
-## Pruebas y aceptación
-
-Desde la raíz del repositorio:
+JDK 17, Gradle 8.11.1, Android SDK 35 y Python 3.10. Esta compilación incluye
+`arm64-v8a` para el Galaxy A07. Chaquopy 17.1.0, yt-dlp 2026.8.19 y
+FFmpegKit maintained min 8.1.9 conservan las versiones del prototipo probado;
+`smart-exception-java` se declara explícitamente por el fallo de clase del prototipo.
 
 ```bash
+npm ci
 node --test tests/*.test.cjs
-bash scripts/check-native-uuid.sh
 npx eslint app
 npx tsc --noEmit
 npm run build
+bash scripts/check-native-uuid.sh
+python -m pip install 'yt-dlp==2026.8.19'
+python -m unittest discover -s tests/python -v
+node scripts/check-apk-origin.cjs https://proyalejandrino.vercel.app --media
+cd android-native
+gradle :app:testDebugUnitTest :app:lintRelease :app:assembleRelease \
+  -PALEJANDRINO_WEB_URL=https://proyalejandrino.vercel.app
 ```
 
-La prueba UUID ahora usa por defecto `NativeCheckService.java`, el validador real
-de esta APK. El workflow histórico conserva la reproducción del patrón defectuoso
-del PR #5 en un checkout aislado.
+El workflow **Authenticated native media** compila y prueba los PR sin distribuir
+APK. En `main` o ejecución manual, exige que la web sea pública y que las tres
+acciones rechacen solicitudes sin sesión, antes de publicar
+`alejandrino-media-unsigned`. Ese artefacto requiere firma antes de instalarlo. No se incluyen tokens de bypass de Vercel.
 
-Los tests web verifican autorización, errores, correlación, timeout y cancelación.
-Los tests JVM verifican que no se lea el índice sin autorización, origen exacto,
-respuesta del servidor, redirecciones, límites y errores de lectura. Son pruebas
-con dobles de Auth/base de datos/red/índice; no acreditan una sesión real ni un
-recorrido WebView en teléfono. La compilación y Android Lint se comprueban en CI.
+Las pruebas web/JVM/Python usan dobles de red, sesión y almacenamiento; no acreditan
+una descarga real en Android. La validación CHECK en Galaxy A07 fue confirmada
+por el usuario el 8/11/2026. La aceptación de DOWNLOAD/OPEN queda pendiente con
+el siguiente recorrido, sin modificar las fichas existentes durante las pruebas.
 
-Pendiente en Galaxy A07:
+## Aceptación en Galaxy A07
 
-- Iniciar sesión y consultar una ficha propia: «No descargado» en instalación limpia.
-- Cerrar sesión durante una comprobación: ningún resultado aparece en otra cuenta.
-- Sin conexión: error visible y posibilidad de reintentar, sin quedarse esperando.
-- Abrir el video original: se abre fuera de WebView y se puede volver a la biblioteca.
-- Verificar asociación real y estado `available` cuando se recupere el índice/importación.
+- Descargar una ficha propia: MP4 con imagen y audio; resolución efectiva visible.
+- Abrir ese archivo desde la ficha; volver a la biblioteca.
+- Reiniciar y comprobar: disponible, sin una segunda copia al repetir descarga.
+- Cancelar/salir durante descarga: error recuperable, sin marcarla disponible.
+- Cambiar de cuenta durante descarga: no se publica ni se muestra en la otra cuenta.
+- Borrar el archivo desde el teléfono: CHECK detecta ausencia y permite reintentar.
+- Proveedor inaccesible o espacio insuficiente: error, ficha conservada.
 
-TA-06/TA-09 (descarga y reproducción) siguen pendientes; esta APK no los implementa.
+No fusionar automáticamente los antiguos PR #3–#5: esta línea integra módulos
+revisados sobre la base estable. Ver también [dependencias](THIRD_PARTY_NOTICES.md).
+
+## Firma persistente de la beta
+
+Desde 0.4.0, la APK entregada se firma fuera de CI con una clave privada estable.
+La variante release conserva el paquete `.check` y no habilita depuración.
+El certificado público está en `beta-signing-certificate.txt`; la clave y su
+contraseña se conservan en un respaldo privado, nunca en este repositorio.
+
+Para firmar el artefacto con JDK 17+ y el JAR `com.android.tools.build:apksig:8.9.2`
+de Google (verificar su checksum publicado):
+
+```bash
+java --class-path /ruta/apksig.jar scripts/SignBetaApk.java \
+  app-release-unsigned.apk Alejandrino-beta.apk \
+  /ruta/privada/alejandrino-beta.p12 /ruta/privada/password.txt
+```
+
+La primera instalación 0.4.0 puede requerir desinstalar **Alejandrino prueba**
+0.3.1, que usó una firma temporal de CI. Las fichas sincronizadas permanecen
+en Supabase; se pierde la sesión y el índice de esa instalación de prueba.
+Las siguientes versiones deben conservar paquete, firma y un versionCode mayor.
+No reemplazar la clave ni solicitar desinstalación como solución rutinaria.

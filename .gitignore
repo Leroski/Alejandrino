@@ -57,3 +57,7 @@ next-env.d.ts
 /android-native/.idea/
 /android-native/local.properties
 /android-native/**/build/
+
+# Python build/test caches
+__pycache__/
+*.py[cod]

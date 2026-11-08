@@ -9,7 +9,7 @@ function parseOrigin(value) {
   return url.origin;
 }
 
-async function checkApkOrigin(value, fetcher = fetch) {
+async function checkApkOrigin(value, fetcher = fetch, { media = false } = {}) {
   const origin = parseOrigin(value);
   const options = { redirect: "manual", signal: AbortSignal.timeout(15000), cache: "no-store" };
   const page = await fetcher(`${origin}/`, options);
@@ -18,7 +18,8 @@ async function checkApkOrigin(value, fetcher = fetch) {
   if (!pageReady) throw new Error("La web está bloqueada, redirige a otro dominio o no responde. Resuelve el acceso en Vercel antes de distribuir la APK.");
 
   // Synthetic identifiers, no account/session and no mutation of Supabase data.
-  const request = { protocolVersion: 1, type: "CHECK", requestId: randomUUID(),
+  for (const action of (media ? ["CHECK", "DOWNLOAD", "OPEN"] : ["CHECK"])) {
+  const request = { protocolVersion: 1, type: action, requestId: randomUUID(),
     userId: randomUUID(), techniqueId: randomUUID() };
   const response = await fetcher(`${origin}/api/native/authorize`, {
     ...options, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request),
@@ -41,14 +42,16 @@ async function checkApkOrigin(value, fetcher = fetch) {
   } finally { await reader.cancel(); }
   const body = JSON.parse(text);
   if (body.protocolVersion !== 1 || body.type !== "ERROR" || body.errorCode !== "AUTH_REQUIRED" ||
-      ["requestId", "userId", "techniqueId"].some(key => body[key] !== request[key])) {
+      ["requestId", "userId", "techniqueId"].some(key => body[key] !== request[key]) ||
+      (action !== "CHECK" && body.action !== action)) {
     throw new Error("El dominio no responde con el contrato CHECK esperado.");
+  }
   }
   return origin;
 }
 
 module.exports = { parseOrigin, checkApkOrigin };
 if (require.main === module) {
-  checkApkOrigin(process.argv[2]).then(origin => console.log(`Origen accesible y API CHECK protegida por sesión: ${origin}`))
+  checkApkOrigin(process.argv[2], fetch, { media: process.argv[3] === "--media" }).then(origin => console.log(`Origen accesible y API CHECK protegida por sesión: ${origin}`))
     .catch(() => { console.error("No se puede distribuir la APK: verifica el origen HTTPS, el acceso a Vercel y la API CHECK. No uses tokens de bypass en la URL ni dentro de la APK."); process.exitCode = 1; });
 }
