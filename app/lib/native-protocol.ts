@@ -18,7 +18,7 @@ export const nativeErrors = {
   TIMEOUT: "La operación tardó demasiado. Revisa tu conexión y vuelve a intentarlo.",
   CANCELLED: "Operación cancelada. Puedes volver a intentarlo.",
   LOCAL_READ_FAILED: "No se pudo comprobar el archivo local. Revisa sus permisos y vuelve a intentarlo.",
-  BUSY: "Hay otras comprobaciones en curso. Vuelve a intentarlo en unos segundos.",
+  BUSY: "Hay otra operación en curso. Vuelve a intentarlo en unos segundos.",
   UNSUPPORTED_BRIDGE: "Esta comprobación requiere la APK de Alejandrino actualizada.",
   SOURCE_UNSUPPORTED: "Esta versión descarga publicaciones de Instagram y TikTok. Puedes abrir el enlace original.",
   DOWNLOAD_FAILED: "No se pudo descargar. El proveedor puede exigir acceso o haber cambiado el video. El enlace sigue guardado.",

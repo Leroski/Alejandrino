@@ -67,14 +67,14 @@ python -m pip install 'yt-dlp==2026.8.19'
 python -m unittest discover -s tests/python -v
 node scripts/check-apk-origin.cjs https://proyalejandrino.vercel.app --media
 cd android-native
-gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug \
+gradle :app:testDebugUnitTest :app:lintRelease :app:assembleRelease \
   -PALEJANDRINO_WEB_URL=https://proyalejandrino.vercel.app
 ```
 
 El workflow **Authenticated native media** compila y prueba los PR sin distribuir
 APK. En `main` o ejecución manual, exige que la web sea pública y que las tres
 acciones rechacen solicitudes sin sesión, antes de publicar
-`alejandrino-media-debug`. No se incluyen tokens de bypass de Vercel.
+`alejandrino-media-unsigned`. Ese artefacto requiere firma antes de instalarlo. No se incluyen tokens de bypass de Vercel.
 
 Las pruebas web/JVM/Python usan dobles de red, sesión y almacenamiento; no acreditan
 una descarga real en Android. La validación CHECK en Galaxy A07 fue confirmada
@@ -93,3 +93,25 @@ el siguiente recorrido, sin modificar las fichas existentes durante las pruebas.
 
 No fusionar automáticamente los antiguos PR #3–#5: esta línea integra módulos
 revisados sobre la base estable. Ver también [dependencias](THIRD_PARTY_NOTICES.md).
+
+## Firma persistente de la beta
+
+Desde 0.4.0, la APK entregada se firma fuera de CI con una clave privada estable.
+La variante release conserva el paquete `.check` y no habilita depuración.
+El certificado público está en `beta-signing-certificate.txt`; la clave y su
+contraseña se conservan en un respaldo privado, nunca en este repositorio.
+
+Para firmar el artefacto con JDK 17+ y el JAR `com.android.tools.build:apksig:8.9.2`
+de Google (verificar su checksum publicado):
+
+```bash
+java --class-path /ruta/apksig.jar scripts/SignBetaApk.java \
+  app-release-unsigned.apk Alejandrino-beta.apk \
+  /ruta/privada/alejandrino-beta.p12 /ruta/privada/password.txt
+```
+
+La primera instalación 0.4.0 puede requerir desinstalar **Alejandrino prueba**
+0.3.1, que usó una firma temporal de CI. Las fichas sincronizadas permanecen
+en Supabase; se pierde la sesión y el índice de esa instalación de prueba.
+Las siguientes versiones deben conservar paquete, firma y un versionCode mayor.
+No reemplazar la clave ni solicitar desinstalación como solución rutinaria.

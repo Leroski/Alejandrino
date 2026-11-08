@@ -71,7 +71,7 @@ jobs:
         run: bash ../scripts/check-native-uuid.sh
       - name: Test, lint and build the media APK
         run: >-
-          gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+          gradle :app:testDebugUnitTest :app:lintRelease :app:assembleRelease --stacktrace
           "-PALEJANDRINO_WEB_URL=$WEB_ORIGIN"
       - name: Wait for public production before distributing an APK
         if: github.event_name == 'push'
@@ -86,6 +86,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: github.event_name != 'pull_request'
         with:
-          name: alejandrino-media-debug
-          path: android-native/app/build/outputs/apk/debug/app-debug.apk
+          name: alejandrino-media-unsigned
+          path: android-native/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error

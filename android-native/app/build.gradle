@@ -20,7 +20,10 @@ android {
     buildFeatures { buildConfig true }
     buildTypes {
         debug { applicationIdSuffix '.check' }
-        release { minifyEnabled false }
+        release {
+            applicationIdSuffix '.check'
+            minifyEnabled false
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

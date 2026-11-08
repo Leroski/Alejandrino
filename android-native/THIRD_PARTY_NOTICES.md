@@ -9,7 +9,7 @@ sus propias licencias; la licencia MIT del proyecto no las sustituye.
 | Python | 3.10 (runtime Chaquopy) | PSF y avisos del runtime · https://docs.python.org/3.10/license.html |
 | yt-dlp | 2026.8.19 | Unlicense y avisos de componentes · https://github.com/yt-dlp/yt-dlp/tree/2026.08.19 |
 | FFmpegKit maintained min | 8.1.9 | LGPL-3.0 · https://github.com/ffmpegkit-maintained/ffmpeg/releases/tag/v8.1.9-lts-android |
-| smart-exception-java | 0.2.1 | LGPL-3.0 · https://github.com/arthenica/smart-exception |
+| smart-exception-java | 0.2.1 | BSD-3-Clause · https://github.com/arthenica/smart-exception |
 | AndroidX WebKit | 1.14.0 | Apache-2.0 · https://android.googlesource.com/platform/frameworks/support/ |
 
 FFmpegKit se integra como bibliotecas compartidas en la variante `min`, sin
