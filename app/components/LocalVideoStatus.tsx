@@ -12,7 +12,7 @@ const stageText: Record<MediaStage, string> = {
 };
 export default function LocalVideoStatus({ userId, techniqueId, sourceUrl, disabled, availability, onLocalChange }: {
   userId: string; techniqueId: string; sourceUrl: string; disabled: boolean;
-  availability?: Status; onLocalChange?: () => void;
+  availability?: { available: boolean }; onLocalChange?: () => void;
 }) {
   const native = useNativeAndroid();
   const media = useNativeMedia();
@@ -22,6 +22,12 @@ export default function LocalVideoStatus({ userId, techniqueId, sourceUrl, disab
   const [stage, setStage] = useState<MediaStage>("authorizing");
   const [error, setError] = useState("");
   const [quality, setQuality] = useState("");
+  const [previousAvailability, setPreviousAvailability] = useState(availability);
+  // Each new preview supersedes older operations; a later CHECK/OPEN can still win.
+  if (availability !== previousAvailability) {
+    setPreviousAvailability(availability);
+    setState("idle");
+  }
   useEffect(() => {
     const { data: { subscription } } = getSupabase().auth.onAuthStateChange((_event, session) => {
       if (session?.user.id !== userId) pending.current?.abort();
@@ -76,8 +82,7 @@ export default function LocalVideoStatus({ userId, techniqueId, sourceUrl, disab
   }
 
   if (!native) return null;
-  // A refreshed preview can discover deletion after an earlier CHECK or OPEN.
-  const visibleState = state === "error" ? state : availability ?? state;
+  const visibleState = state === "idle" && availability ? availability.available ? "available" : "missing" : state;
   const button = "min-h-11 rounded-xl bg-zinc-800 px-3 py-3 text-sm focus-visible:outline-2 focus-visible:outline-red-400 disabled:opacity-50";
   return <div className="mt-3 grid gap-2">
     <p role="status" aria-live="polite" className="text-sm text-zinc-300">

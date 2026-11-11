@@ -112,7 +112,7 @@ export default function TechniqueCard({ technique, disabled, onDelete, onUpdate,
       <p className="mt-1 truncate text-sm text-zinc-400" title={technique.url}>{technique.url}</p>
       {labels.length > 0 && <p className="mt-3 break-words text-sm text-zinc-300">{labels.join(" · ")}</p>}
       <LocalVideoStatus key={`${technique.user_id}:${technique.id}`} userId={technique.user_id} techniqueId={technique.id}
-        sourceUrl={technique.url} disabled={disabled} availability={local.preview ? local.preview.available ? "available" : "missing" : undefined}
+        sourceUrl={technique.url} disabled={disabled} availability={local.preview}
         onLocalChange={() => void local.load()} />
       <div className="mt-4 grid grid-cols-3 gap-2">
         <a href={technique.url} target={native ? "_self" : "_blank"} rel="noopener noreferrer"

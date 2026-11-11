@@ -54,6 +54,10 @@ const techniqueId = '019321ab-cdef-7abc-8def-0123456789ab';
           if (m.type === 'CANCEL') return;
           window.__lastPreview = m;
           if (window.__previewMode === 'silent') return;
+          if (window.__previewMode === 'failed') {
+            setTimeout(() => this.onmessage?.({ data: JSON.stringify({ ...m, type: 'ERROR', action: 'PREVIEW', errorCode: 'PREVIEW_FAILED' }) }), 15);
+            return;
+          }
           const selected = m.frame ?? Number(localStorage.getItem('fixture-frame') || 0);
           localStorage.setItem('fixture-frame', String(selected));
           const canvas = document.createElement('canvas'); canvas.width = 200; canvas.height = 300;
@@ -106,6 +110,17 @@ const techniqueId = '019321ab-cdef-7abc-8def-0123456789ab';
         await page.getByRole('button', { name: 'Actualizar datos', exact: true }).click();
         await page.getByText('No descargado en este dispositivo', { exact: true }).waitFor();
         assert.equal(await page.locator('article img').count(), 0);
+        assert.equal(await page.getByRole('button', { name: 'Reproducir video local', exact: true }).count(), 0);
+        // A newer CHECK can find the file even if refreshing its cover fails.
+        await page.evaluate(() => window.__previewMode = 'failed');
+        await page.getByRole('button', { name: 'Comprobar video local', exact: true }).click();
+        await page.getByText('No se pudo obtener la vista previa. El video sigue guardado; puedes volver a intentarlo.', { exact: true }).waitFor();
+        await page.getByText('Disponible en este dispositivo', { exact: true }).waitFor();
+        await page.getByRole('button', { name: 'Reproducir video local', exact: true }).waitFor();
+        // A fresh preview with the same availability value must supersede that CHECK.
+        await page.evaluate(() => window.__previewMode = 'missing');
+        await page.getByRole('button', { name: 'Actualizar datos', exact: true }).click();
+        await page.getByText('No descargado en este dispositivo', { exact: true }).waitFor();
         assert.equal(await page.getByRole('button', { name: 'Reproducir video local', exact: true }).count(), 0);
         await page.evaluate(() => window.__previewMode = 'silent');
         await page.getByRole('button', { name: 'Actualizar datos', exact: true }).click();
