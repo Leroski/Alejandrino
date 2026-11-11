@@ -80,12 +80,29 @@ gradle :app:testDebugUnitTest :app:lintRelease :app:assembleRelease \
 ```
 
 El workflow **Authenticated native media** compila y prueba los PR sin distribuir
-APK. En `main` o ejecución manual, exige que la web sea pública y que las tres
+APK. Ejecuta además pruebas instrumentadas en Android 10/API 29 y Android 15/API 35;
+la compilación de distribución depende de que ambas pasen. En `main` o ejecución manual, exige que la web sea pública y que las tres
 acciones rechacen solicitudes sin sesión, antes de publicar
 `alejandrino-media-unsigned`. Ese artefacto requiere firma antes de instalarlo. No se incluyen tokens de bypass de Vercel.
 
-Las pruebas web/JVM/Python usan dobles de red, sesión y almacenamiento; no acreditan
-una descarga real en Android. La validación CHECK en Galaxy A07 fue confirmada
+Las pruebas web/JVM/Python usan dobles de red, sesión y almacenamiento. Las pruebas
+instrumentadas usan el Python, yt-dlp, guardia Java, FFmpeg y MediaStore de la APK,
+con video y audio generados y respuestas de red simuladas. Cubren MP4 combinado,
+pistas separadas, fragmentos DASH, originales sin audio y un rechazo HTTP 403;
+validan las pistas y un fotograma del archivo guardado. No acreditan el acceso
+a una publicación concreta ni una ejecución en ARM64/Samsung.
+
+Para repetirlas en un emulador x86_64 (se requiere FFmpeg en el equipo anfitrión):
+
+```bash
+bash scripts/create-media-test-fixtures.sh
+gradle -p android-native :app:connectedDebugAndroidTest -PEMULATOR_TEST \
+  -PALEJANDRINO_WEB_URL=https://proyalejandrino.vercel.app
+```
+
+Los medios generados solo se incluyen en la APK de pruebas; `EMULATOR_TEST`
+selecciona x86_64 y se omite al compilar la APK arm64 para el teléfono.
+La validación CHECK en Galaxy A07 fue confirmada
 por el usuario el 8/11/2026. La aceptación de DOWNLOAD/OPEN queda pendiente con
 el siguiente recorrido, sin modificar las fichas existentes durante las pruebas.
 

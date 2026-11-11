@@ -56,7 +56,7 @@ public class MediaRuntimeTest {
     }
 
     @After public void clean() throws Exception {
-        if (scope != null) scope.get("restore").call();
+        if (scope != null) scope.callAttr("__getitem__", "restore").call();
         if (context != null) {
             LocalFileIndex index = new LocalFileIndex(context);
             Uri saved = index.uri(user, technique);
@@ -71,7 +71,7 @@ public class MediaRuntimeTest {
     }
 
     private void mode(String mode) {
-        scope.get("install").call(fixtureDirectory.getAbsolutePath(), mode);
+        scope.callAttr("__getitem__", "install").call(fixtureDirectory.getAbsolutePath(), mode);
     }
 
     @Test public void bundledFfmpegLoads() {
