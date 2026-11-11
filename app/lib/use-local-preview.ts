@@ -6,6 +6,7 @@ import { NativeCheckError } from "./native-protocol";
 import type { NativePreview, PreviewOptions } from "./native-preview-client";
 import { downloadSource } from "./native-media-protocol";
 import { getSupabase } from "./supabase";
+import { claimPreviewRefresh, needsPreviewMetadata } from "./preview-refresh-policy";
 
 export function useLocalPreview(userId: string, techniqueId: string, sourceUrl: string) {
   const supported = useNativePreview() && !!downloadSource(sourceUrl);
@@ -36,7 +37,16 @@ export function useLocalPreview(userId: string, techniqueId: string, sourceUrl: 
       const session = result.data.session;
       if (result.error || !session) throw new NativeCheckError("AUTH_REQUIRED");
       if (session.user.id !== userId) throw new NativeCheckError("SESSION_MISMATCH");
-      const value = await readLocalPreview({ userId, techniqueId, accessToken: session.access_token }, options, controller.signal);
+      const input = { userId, techniqueId, accessToken: session.access_token };
+      const key = `${userId}:${techniqueId}:${sourceUrl}`;
+      if (options.refresh) claimPreviewRefresh(key, true);
+      let value = await readLocalPreview(input, options, controller.signal);
+      if (!controller.signal.aborted && pending.current === controller) setPreview(value);
+      // Show cached/offline data immediately, then fill missing context automatically once.
+      if (!controller.signal.aborted && !options.refresh && options.frame === undefined &&
+          needsPreviewMetadata(value) && claimPreviewRefresh(key)) {
+        value = await readLocalPreview(input, { refresh: true }, controller.signal);
+      }
       if (!controller.signal.aborted && pending.current === controller) {
         setPreview(value);
         if (value.metadataFailed) setError("No pudimos actualizar los datos del proveedor. Conservamos la vista previa disponible.");
@@ -54,7 +64,7 @@ export function useLocalPreview(userId: string, techniqueId: string, sourceUrl: 
       if (rejectSession) controller.signal.removeEventListener("abort", rejectSession);
       if (pending.current === controller) { pending.current = null; setBusy(false); }
     }
-  }, [supported, userId, techniqueId]);
+  }, [supported, userId, techniqueId, sourceUrl]);
 
   useEffect(() => {
     if (!supported) return;

@@ -11,12 +11,12 @@ const techniqueId = '019321ab-cdef-7abc-8def-0123456789ab';
 (async () => {
   const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH, args: ['--no-sandbox'] });
   try {
-    for (const mode of ['preview', 'old-apk', 'web']) {
+    for (const mode of ['preview', 'new-link', 'old-apk', 'web']) {
       const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
       const errors = [], requests = [];
       page.on('pageerror', error => errors.push(error.message));
       page.on('request', request => requests.push({ url: request.url(), body: request.postData() || '' }));
-      let row = { id: techniqueId, user_id: userId, name: 'Mi entrada de judo', discipline: '', position: '', category: '',
+      let row = { id: techniqueId, user_id: userId, name: mode === 'new-link' ? 'Instagram · 10-11, 23:50' : 'Mi entrada de judo', discipline: '', position: '', category: '',
         source: 'Instagram', url: 'https://www.instagram.com/reel/Fixture/', revision: 1,
         created_at: '2026-11-09T00:00:00Z', updated_at: '2026-11-09T00:00:00Z' };
       await page.route('https://fixture.supabase.co/**', async route => {
@@ -48,11 +48,22 @@ const techniqueId = '019321ab-cdef-7abc-8def-0123456789ab';
           } };
           window.AlejandrinoMediaV1 = { onmessage: null, postMessage() {} };
         }
-        if (mode !== 'preview') return;
+        if (mode !== 'preview' && mode !== 'new-link') return;
+        window.__previewRequests = [];
         window.AlejandrinoPreviewV1 = { onmessage: null, postMessage(raw) {
           const { accessToken, ...m } = JSON.parse(raw);
           if (m.type === 'CANCEL') return;
+          window.__previewRequests.push(m);
           window.__lastPreview = m;
+          if (mode === 'new-link') {
+            if (m.refresh) window.__hasMetadata = true;
+            const preview = { available: false, image: '', frame: 0, duration: 0, metadataFailed: false, frameFailed: false,
+              metadata: { title: window.__hasMetadata ? 'Video by Autor de prueba' : '', author: '', duration: 62,
+                description: window.__hasMetadata ? 'Entrada de uchi-mata con agarre de manga' : '',
+                thumbnail_url: window.__hasMetadata ? 'https://scontent.cdninstagram.com/fixture.jpg' : '' } };
+            setTimeout(() => this.onmessage?.({ data: JSON.stringify({ ...m, type: 'PREVIEW_RESULT', action: 'PREVIEW', preview }) }), 15);
+            return;
+          }
           if (window.__previewMode === 'silent') return;
           if (window.__previewMode === 'failed') {
             setTimeout(() => this.onmessage?.({ data: JSON.stringify({ ...m, type: 'ERROR', action: 'PREVIEW', errorCode: 'PREVIEW_FAILED' }) }), 15);
@@ -71,8 +82,22 @@ const techniqueId = '019321ab-cdef-7abc-8def-0123456789ab';
           setTimeout(() => this.onmessage?.({ data: JSON.stringify({ ...m, type: 'PREVIEW_RESULT', action: 'PREVIEW', preview }) }), 15);
         } };
       }, { userId, mode });
+      await page.route('https://scontent.cdninstagram.com/fixture.jpg', route => route.fulfill({
+        contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64') }));
       await page.goto(baseURL, { waitUntil: 'networkidle' });
-      await page.getByRole('heading', { name: 'Mi entrada de judo', exact: true }).waitFor();
+      await page.getByRole('heading', { name: mode === 'new-link' ? 'Entrada de uchi-mata con agarre de manga' : 'Mi entrada de judo', exact: true }).waitFor();
+      if (mode === 'new-link') {
+        // No refresh button was pressed: local miss must trigger exactly one provider request.
+        await page.waitForFunction(() => document.querySelector('article img')?.naturalWidth > 0);
+        assert.deepEqual(await page.evaluate(() => window.__previewRequests.map(m => !!m.refresh)), [false, true]);
+        await page.getByLabel('Buscar videos', { exact: true }).fill('uchi-mata');
+        await page.getByRole('heading', { name: 'Entrada de uchi-mata con agarre de manga', exact: true }).waitFor();
+        await page.getByRole('button', { name: 'Editar', exact: true }).click();
+        assert.equal(await page.getByLabel('Título de tu ficha', { exact: true }).inputValue(), 'Entrada de uchi-mata con agarre de manga');
+        await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
+        assert.equal(row.name, 'Entrada de uchi-mata con agarre de manga');
+        assert.equal(await page.getByRole('button', { name: 'Descargar al dispositivo', exact: true }).count(), 1);
+      } else
       if (mode === 'preview') {
         await page.getByText('Por Autor de prueba', { exact: true }).waitFor();
         await page.getByRole('button', { name: 'Reproducir video local', exact: true }).waitFor();

@@ -1,7 +1,8 @@
-# Alejandrino: descarga, reproducción y vistas previas · 0.5.0
+# Alejandrino: descarga, reproducción y vistas previas · 0.5.1
 
-La versión 0.5.0 incorpora portadas locales, selección de fotograma y metadatos
-del proveedor. Ver [vistas previas, límites y aceptación](../docs/vistas-previas.md).
+La versión 0.5.1 consulta automáticamente los metadatos que faltan, usa títulos
+descriptivos y distingue las causas de fallo de descarga. Ver
+[vistas previas, límites y aceptación](../docs/vistas-previas.md).
 
 La APK **Alejandrino prueba** permite guardar/consultar fichas, descargar una
 publicación de Instagram o TikTok y reproducir su MP4 desde la misma ficha.
@@ -21,7 +22,11 @@ es diez minutos y 256 MiB de pistas; no se reanudan tareas en segundo plano.
 La pantalla permanece encendida mientras se descarga con la app visible.
 
 Se busca una resolución cercana a 720p sin recodificar. Se muestra la resolución
-real cuando termina. Se exige un MP4 con imagen y audio; si el proveedor requiere
+real cuando termina. Se exige un MP4 con imagen y se conserva el audio cuando el
+original lo contiene; un original expresamente sin audio también se admite.
+Si falla una pista, se prueba como máximo un MP4 combinado alternativo del mismo
+resultado público, eliminando los archivos parciales del intento anterior.
+Si el proveedor requiere
 login, no ofrece formatos compatibles o falla, se informa el error y se conserva
 la ficha. No se importan cookies ni se evaden restricciones del proveedor.
 YouTube, importación de archivos y biblioteca offline quedan para otra fase.
@@ -54,9 +59,9 @@ reproductor local; el archivo audiovisual no se transmite a ningún servidor.
 
 ## Compilación y pruebas
 
-JDK 17, Gradle 8.11.1, Android SDK 35 y Python 3.10. Esta compilación incluye
-`arm64-v8a` para el Galaxy A07. Chaquopy 17.1.0, yt-dlp 2026.8.19 y
-FFmpegKit maintained min 8.1.9 conservan las versiones del prototipo probado;
+JDK 17, Gradle 8.11.1, Android SDK 35 y Python 3.11. Esta compilación incluye
+`arm64-v8a` para el Galaxy A07. Usa Chaquopy 17.1.0, yt-dlp 2026.10.26 y
+FFmpegKit maintained min 8.1.9;
 `smart-exception-java` se declara explícitamente por el fallo de clase del prototipo.
 
 ```bash
@@ -66,7 +71,7 @@ npx eslint app
 npx tsc --noEmit
 npm run build
 bash scripts/check-native-uuid.sh
-python -m pip install 'yt-dlp==2026.8.19'
+python -m pip install 'yt-dlp==2026.10.26'
 python -m unittest discover -s tests/python -v
 node scripts/check-apk-origin.cjs https://proyalejandrino.vercel.app --media
 cd android-native

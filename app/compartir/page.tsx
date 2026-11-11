@@ -6,11 +6,11 @@ import { useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import AuthGate from "../components/AuthGate";
 import { addTechnique, draftFromText } from "../lib/techniques";
-import { sharedLink } from "../lib/shared-link";
+import { sharedCaption, sharedLink } from "../lib/shared-link";
 import { errorMessage } from "../lib/supabase";
 import { requestVideoMetadata } from "../lib/video-metadata";
 
-function SaveSharedLink({ initialUrl, user }: { initialUrl: string; user: User }) {
+function SaveSharedLink({ initialUrl, caption, user }: { initialUrl: string; caption: string; user: User }) {
   const [url, setUrl] = useState(initialUrl);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -24,7 +24,9 @@ function SaveSharedLink({ initialUrl, user }: { initialUrl: string; user: User }
     setBusy(true);
     setError("");
     try {
-      const item = await addTechnique(user.id, draftFromText(url));
+      const draft = draftFromText(url);
+      if (url === initialUrl && caption) draft.name = caption;
+      const item = await addTechnique(user.id, draft);
       // La confirmación de guardado no espera a la vista previa. Si cierras la app,
       // la biblioteca vuelve a intentar las consultas pendientes cuando la abras.
       if (item) void requestVideoMetadata(item.id, user.id).catch(() => {});
@@ -69,7 +71,8 @@ function SharedContent() {
   const params = useSearchParams();
   const url = sharedLink(params);
   // La URL permanece en esta página mientras se muestra el inicio de sesión.
-  return <AuthGate>{user => <SaveSharedLink key={`${user.id}:${params.toString()}`} user={user} initialUrl={url} />}</AuthGate>;
+  return <AuthGate>{user => <SaveSharedLink key={`${user.id}:${params.toString()}`} user={user} initialUrl={url}
+    caption={sharedCaption(params, url)} />}</AuthGate>;
 }
 
 export default function SharePage() {

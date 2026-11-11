@@ -1,5 +1,6 @@
 import { getSupabase } from "./supabase";
 import { cleanField, type Technique, type TechniqueDraft } from "../types/technique";
+import { sharedTitle, UNTITLED_VIDEO } from "./video-title";
 
 export const LEGACY_KEY = "grappling-library-techniques";
 
@@ -27,10 +28,7 @@ export function detectSource(value: string): string {
 export function draftFromText(text: string): TechniqueDraft {
   const url = extractUrl(text);
   const source = detectSource(url);
-  const stamp = new Date().toLocaleString("es-CL", {
-    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
-  });
-  return { url, source, name: `${source} · ${stamp}`, discipline: "", position: "", category: "" };
+  return { url, source, name: sharedTitle(text) || UNTITLED_VIDEO, discipline: "", position: "", category: "" };
 }
 
 export function searchable(text: string): string {

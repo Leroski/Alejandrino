@@ -85,3 +85,15 @@ test('rechaza respuestas de otra cuenta o acción y limita tareas simultáneas',
  const rejected=assert.rejects(first,e=>e.code==='CANCELLED');
  await assert.rejects(t.client.run('DOWNLOAD',input,c.signal,()=>{}),e=>e.code==='BUSY'); c.abort(); await rejected;
 });
+
+test('comunica causas de descarga acotadas y distingue originales sin audio', async () => {
+ for (const code of ['PROVIDER_ACCESS_REQUIRED','PROVIDER_RATE_LIMITED','PROVIDER_UNAVAILABLE',
+   'DOWNLOAD_NETWORK_FAILED','FORMAT_UNAVAILABLE','FILE_TOO_LARGE']) {
+  const t=transport(), p=t.client.run('DOWNLOAD',input,new AbortController().signal,()=>{});
+  t.reply(t.sent[0],{type:'ERROR',errorCode:code,message:'private provider details'});
+  await assert.rejects(p,e=>e.code===code && !e.message.includes('private'));
+ }
+ const t=transport(), p=t.client.run('DOWNLOAD',input,new AbortController().signal,()=>{});
+ t.reply(t.sent[0],{type:'AVAILABLE',width:720,height:1280,hasAudio:false});
+ assert.deepEqual(await p,{type:'AVAILABLE',width:720,height:1280,hasAudio:false});
+});
