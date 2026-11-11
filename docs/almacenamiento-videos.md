@@ -1,7 +1,9 @@
 # Videos locales y fichas sincronizadas
 
-Estado: requisito confirmado y propuesta de diseño. La biblioteca de archivos
-locales y las descargas todavía no están implementadas.
+Estado: principios vigentes. La descarga, el índice local y la reproducción
+están implementados en la APK (ver `android-native/README.md`); se optó por un
+WebView propio en vez de Capacitor. Siguen pendientes la vinculación de archivos
+existentes, la biblioteca sin conexión y los videos sin enlace original.
 
 ## Objetivo
 

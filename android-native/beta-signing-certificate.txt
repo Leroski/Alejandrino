@@ -1,4 +1,5 @@
-Alejandrino beta: certificado público desde 0.4.0
+Alejandrino beta: certificado público desde 0.5.2 (11/11/2026)
 Paquete: cl.alejandrino.nativeapp.check
-sha256 Fingerprint=0B:60:62:50:4A:DB:A2:95:42:BF:D0:14:5C:0E:E0:C8:F7:1E:D0:54:9C:E9:00:15:76:7C:EB:66:40:6C:A5:44
+sha256 Fingerprint=37:EB:AA:48:3C:91:1D:8B:56:00:62:35:FE:B0:F1:7A:EA:B3:86:4F:68:38:C9:53:6B:5A:D3:C9:E1:86:80:47
 La clave privada no se almacena en Git ni en GitHub Actions.
+Reemplaza al certificado 0B:60:62:…:A5:44 (0.4.0–0.5.1), cuya clave privada se perdió.

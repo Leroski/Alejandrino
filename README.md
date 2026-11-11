@@ -13,12 +13,11 @@ encontrarlos después y clasificarlos por disciplina, posición y categoría.
 - APK Android de prueba: CHECK autenticado, descarga de publicaciones de Instagram
   y TikTok al dispositivo y reproducción local desde la ficha.
 
-**Estado:** proyecto en desarrollo. CHECK fue validado en Galaxy A07. La fase
-multimedia 0.4.0 incorpora descarga y reproducción y requiere aceptación en ese
-mismo teléfono. Se busca calidad cercana a 720p con audio; depende de la fuente.
-La descarga requiere mantener la app visible. La biblioteca offline, descargas
-persistentes en segundo plano y recuperación/importación del índice siguen
-pendientes. Los prototipos anteriores se conservan en ramas experimentales.
+**Estado:** beta privada 0.5.2, en uso en Galaxy A07 (guardar, descargar y
+reproducir confirmados el 11/11/2026). La descarga requiere mantener la app visible.
+Pendientes: biblioteca sin conexión, descargas en segundo plano, vinculación de
+archivos existentes y deduplicación por identidad de publicación. Ver
+[contexto del producto](docs/contexto-producto.md).
 
 ## Desarrollo local
 
@@ -70,6 +69,7 @@ actuales necesita conexión; no se declara soporte completo sin conexión.
 
 ## Documentación
 
+- [Contexto del producto y pendientes](docs/contexto-producto.md)
 - [Seguridad y despliegue](SECURITY.md)
 - [Contrato y pruebas de la APK](android-native/README.md)
 - [Almacenamiento de videos](docs/almacenamiento-videos.md)

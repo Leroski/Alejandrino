@@ -106,9 +106,8 @@ gradle -p android-native :app:connectedDebugAndroidTest -PEMULATOR_TEST \
 
 Los medios generados solo se incluyen en la APK de pruebas; `EMULATOR_TEST`
 selecciona x86_64 y se omite al compilar la APK arm64 para el teléfono.
-La validación CHECK en Galaxy A07 fue confirmada
-por el usuario el 8/11/2026. La aceptación de DOWNLOAD/OPEN queda pendiente con
-el siguiente recorrido, sin modificar las fichas existentes durante las pruebas.
+La validación CHECK en Galaxy A07 fue confirmada por el usuario el 8/11/2026,
+y la descarga y reproducción de la 0.5.2 el 11/11/2026.
 
 ## Aceptación en Galaxy A07
 
@@ -125,22 +124,24 @@ revisados sobre la base estable. Ver también [dependencias](THIRD_PARTY_NOTICES
 
 ## Firma persistente de la beta
 
-Desde 0.4.0, la APK entregada se firma fuera de CI con una clave privada estable.
+La APK entregada se firma fuera de CI con una clave privada estable.
 La variante release conserva el paquete `.check` y no habilita depuración.
 El certificado público está en `beta-signing-certificate.txt`; la clave y su
 contraseña se conservan en un respaldo privado, nunca en este repositorio.
 
-Para firmar el artefacto con JDK 17+ y el JAR `com.android.tools.build:apksig:8.9.2`
-de Google (verificar su checksum publicado):
+Firma con `apksigner` (incluido en Android SDK build-tools):
 
 ```bash
-java --class-path /ruta/apksig.jar scripts/SignBetaApk.java \
-  app-release-unsigned.apk Alejandrino-beta.apk \
-  /ruta/privada/alejandrino-beta.p12 /ruta/privada/password.txt
+apksigner sign --ks ~/claves/alejandrino-beta.p12 \
+  --out Alejandrino-beta.apk app-release-unsigned.apk
+apksigner verify --print-certs Alejandrino-beta.apk | grep SHA-256
 ```
 
-La primera instalación 0.4.0 puede requerir desinstalar **Alejandrino prueba**
-0.3.1, que usó una firma temporal de CI. Las fichas sincronizadas permanecen
-en Supabase; se pierde la sesión y el índice de esa instalación de prueba.
-Las siguientes versiones deben conservar paquete, firma y un versionCode mayor.
-No reemplazar la clave ni solicitar desinstalación como solución rutinaria.
+La huella debe coincidir con `beta-signing-certificate.txt`. También sirve
+`scripts/SignBetaApk.java` con el JAR `com.android.tools.build:apksig`.
+
+La clave usada en 0.4.0–0.5.1 se perdió; la 0.5.2 se firmó con una clave nueva
+y requirió desinstalar la versión anterior (las fichas siguen en Supabase; se
+pierden la sesión y el índice local). Respaldar la clave y su contraseña por
+separado. Las siguientes versiones deben conservar paquete, firma y un
+versionCode mayor. No reemplazar la clave como solución rutinaria.

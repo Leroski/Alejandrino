@@ -1,5 +1,7 @@
 # Estabilización de Alejandrino: INC-01
 
+> Documento histórico: INC-01 quedó resuelto y validado en Galaxy A07 (8/11/2026).
+
 Fecha: 6 de noviembre de 2026. Requisitos: ALE-SRS-001, secciones 8, 10, 12 y 14.
 
 ## Resultado y alcance de este incremento
