@@ -35,6 +35,32 @@ jobs:
       - run: npx eslint app
       - run: npx tsc --noEmit
       - run: npm run build
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.62.1
+          npx playwright install --with-deps chromium
+      - name: Verify preview UI with synthetic accounts and native responses
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://fixture.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_fixture
+          NEXT_TELEMETRY_DISABLED: '1'
+          PREVIEW_QA_OUTPUT: /tmp/preview-qa
+        run: |
+          npm run dev -- --hostname 127.0.0.1 --port 3015 > /tmp/preview-dev.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:3015/ > /dev/null; then break; fi
+            sleep 1
+          done
+          node tests/browser/preview.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preview-ui-fixtures
+          path: /tmp/preview-qa
+          retention-days: 5
+          if-no-files-found: ignore
 
   android:
     runs-on: ubuntu-latest

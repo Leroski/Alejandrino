@@ -1,4 +1,7 @@
-# Alejandrino: descarga y reproducción local · 0.4.0
+# Alejandrino: descarga, reproducción y vistas previas · 0.5.0
+
+La versión 0.5.0 incorpora portadas locales, selección de fotograma y metadatos
+del proveedor. Ver [vistas previas, límites y aceptación](../docs/vistas-previas.md).
 
 La APK **Alejandrino prueba** permite guardar/consultar fichas, descargar una
 publicación de Instagram o TikTok y reproducir su MP4 desde la misma ficha.

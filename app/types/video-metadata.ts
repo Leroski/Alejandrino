@@ -33,7 +33,7 @@ export function safeThumbnail(value: unknown): string {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.username || url.password || url.port) return "";
     const domains = ["ytimg.com", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokcdn-eu.com",
-      "muscdn.com", "byteimg.com", "ibytedtos.com", "tiktokv.com"];
+      "muscdn.com", "byteimg.com", "ibytedtos.com", "tiktokv.com", "cdninstagram.com", "fbcdn.net"];
     return domains.some(domain => url.hostname === domain || url.hostname.endsWith(`.${domain}`)) ? url.href : "";
   } catch { return ""; }
 }
@@ -42,8 +42,15 @@ export function metadataMessage(item?: VideoMetadata): string {
   if (!item) return "Vista previa pendiente.";
   if (item.status === "processing") return "Buscando información del video…";
   if (item.status === "error") return "No pudimos consultar la vista previa. El enlace sigue guardado.";
-  if (item.reason === "instagram") return "Enlace guardado. La vista previa de Instagram todavía no está integrada.";
+  if (item.reason === "instagram") return "La APK actualizada puede obtener la portada y los datos de Instagram en tu teléfono.";
   if (item.reason === "unsupported") return "Enlace guardado. Esta fuente aún no tiene vista previa automática.";
   if (item.status === "unavailable") return "El proveedor no entregó una vista previa. Puedes abrir el enlace original.";
   return "";
+}
+
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 86400) return "";
+  const total = Math.max(1, Math.floor(seconds));
+  const minutes = Math.floor(total / 60), rest = String(total % 60).padStart(2, "0");
+  return minutes < 60 ? `${minutes}:${rest}` : `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${rest}`;
 }

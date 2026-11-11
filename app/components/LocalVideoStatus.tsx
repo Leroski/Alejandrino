@@ -10,8 +10,9 @@ const stageText: Record<MediaStage, string> = {
   authorizing: "Verificando ficha…", downloading: "Descargando video…",
   merging: "Uniendo audio y video…", saving: "Guardando en el dispositivo…",
 };
-export default function LocalVideoStatus({ userId, techniqueId, sourceUrl, disabled }: {
+export default function LocalVideoStatus({ userId, techniqueId, sourceUrl, disabled, availability, onLocalChange }: {
   userId: string; techniqueId: string; sourceUrl: string; disabled: boolean;
+  availability?: Status; onLocalChange?: () => void;
 }) {
   const native = useNativeAndroid();
   const media = useNativeMedia();
@@ -50,7 +51,7 @@ export default function LocalVideoStatus({ userId, techniqueId, sourceUrl, disab
       const input = { userId, techniqueId, accessToken: session.access_token };
       if (action === "CHECK") {
         const status = await checkLocalVideo(input, controller.signal);
-        if (!controller.signal.aborted) setState(status);
+        if (!controller.signal.aborted) { setState(status); onLocalChange?.(); }
       } else {
         const result = await runLocalMedia(action, input, controller.signal, next => {
           if (pending.current === controller && !controller.signal.aborted) setStage(next);
@@ -58,11 +59,13 @@ export default function LocalVideoStatus({ userId, techniqueId, sourceUrl, disab
         if (!controller.signal.aborted) {
           setState("available");
           if (result.type === "AVAILABLE" && result.width && result.height) setQuality(`${result.width} × ${result.height} · con audio`);
+          if (action === "DOWNLOAD") onLocalChange?.();
         }
       }
     } catch (cause) {
       if (pending.current === controller) {
         setState("error");
+        if (cause instanceof NativeCheckError && cause.code === "LOCAL_MISSING") onLocalChange?.();
         setError(sessionTimedOut ? new NativeCheckError("TIMEOUT").message :
           cause instanceof NativeCheckError ? cause.message : new NativeCheckError("UNAVAILABLE").message);
       }
@@ -73,21 +76,22 @@ export default function LocalVideoStatus({ userId, techniqueId, sourceUrl, disab
   }
 
   if (!native) return null;
+  const visibleState = state === "idle" && availability ? availability : state;
   const button = "min-h-11 rounded-xl bg-zinc-800 px-3 py-3 text-sm focus-visible:outline-2 focus-visible:outline-red-400 disabled:opacity-50";
   return <div className="mt-3 grid gap-2">
     <p role="status" aria-live="polite" className="text-sm text-zinc-300">
       {busy === "DOWNLOAD" ? stageText[stage] : busy === "CHECK" ? "Comprobando archivo local…" :
-        busy === "OPEN" ? "Abriendo video local…" : state === "available" ? "Disponible en este dispositivo" :
-        state === "missing" ? "No descargado en este dispositivo" : state === "error" ? error : "Archivo local sin comprobar"}
+        busy === "OPEN" ? "Abriendo video local…" : visibleState === "available" ? "Disponible en este dispositivo" :
+        visibleState === "missing" ? "No descargado en este dispositivo" : state === "error" ? error : "Archivo local sin comprobar"}
     </p>
-    {quality && state === "available" && <p className="text-xs text-zinc-400">{quality}</p>}
+    {quality && visibleState === "available" && <p className="text-xs text-zinc-400">{quality}</p>}
     {busy === "DOWNLOAD" && <>
       <p className="text-xs text-zinc-400">Mantén Alejandrino abierto. Al salir o bloquear el teléfono, la descarga se cancela y puedes reintentar.</p>
       <button type="button" className={button} onClick={() => pending.current?.abort()}>Cancelar descarga</button>
     </>}
-    {media && state === "available" && <button type="button" className={`${button} bg-emerald-900`}
+    {media && visibleState === "available" && <button type="button" className={`${button} bg-emerald-900`}
       disabled={disabled || !!busy} onClick={() => void run("OPEN")}>Reproducir video local</button>}
-    {media && state !== "available" && downloadSource(sourceUrl) && <button type="button" className={`${button} bg-red-700`}
+    {media && visibleState !== "available" && downloadSource(sourceUrl) && <button type="button" className={`${button} bg-red-700`}
       disabled={disabled || !!busy} onClick={() => void run("DOWNLOAD")}>Descargar al dispositivo</button>}
     <button type="button" disabled={disabled || !!busy} onClick={() => void run("CHECK")} className={button}>
       {busy === "CHECK" ? "Comprobando…" : "Comprobar video local"}
