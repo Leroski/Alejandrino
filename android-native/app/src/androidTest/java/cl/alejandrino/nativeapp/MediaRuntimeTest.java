@@ -83,7 +83,7 @@ public class MediaRuntimeTest {
         mode("separate");
         File folder = new File(context.getCacheDir(), "runtime-extraction-" + technique);
         // Call extract directly here so a runtime error in this synthetic fixture is observable in CI.
-        String raw = Python.getInstance().getModule("extractor").callAttr("extract", SOURCE,
+        String raw = Python.getInstance().getModule("alejandrino_media").callAttr("extract", SOURCE,
             folder.getAbsolutePath(), new DownloadGuard(30000)).toString();
         JSONObject tracks = new JSONObject(raw);
         assertTrue(new File(tracks.getString("video_path")).length() > 0);
@@ -117,6 +117,25 @@ public class MediaRuntimeTest {
     @Test public void separateTracksAreMergedAndPublished() throws Exception { roundTrip("separate", true); }
     @Test public void dashFragmentsAreMergedAndPublished() throws Exception { roundTrip("dash", true); }
     @Test public void silentOriginalIsPublished() throws Exception { roundTrip("silent", false); }
+
+    @Test public void previewThenRepeatedDownloadsKeepTheBridgeModule() throws Exception {
+        mode("combined");
+        var python = Python.getInstance();
+        var original = python.getModule("alejandrino_media");
+        JSONObject metadata = new JSONObject(original.callAttr("preview", SOURCE, new DownloadGuard(30000)).toString());
+        assertEquals("Android runtime fixture", metadata.getString("title"));
+        File folder = new File(context.getCacheDir(), "runtime-extraction-" + technique);
+        for (int attempt = 0; attempt < 2; attempt++) {
+            // Resolve the module again, just as independent WebView requests do.
+            var current = python.getModule("alejandrino_media");
+            assertEquals(original.id(), current.id());
+            JSONObject tracks = new JSONObject(current.callAttr("extract_result", SOURCE,
+                folder.getAbsolutePath(), new DownloadGuard(30000)).toString());
+            assertTrue(new File(tracks.getString("video_path")).length() > 0);
+            remove(folder);
+        }
+        roundTrip("combined", true);
+    }
 
     @Test public void rejectedTransferReportsAccessWithoutPublishing() throws Exception {
         mode("denied");

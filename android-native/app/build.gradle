@@ -12,8 +12,8 @@ android {
         applicationId 'cl.alejandrino.nativeapp'
         minSdk 29
         targetSdk 35
-        versionCode 6
-        versionName '0.5.1-capture-fixes'
+        versionCode 7
+        versionName '0.5.2-media-runtime'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         ndk { abiFilters (project.hasProperty('EMULATOR_TEST') ? 'x86_64' : 'arm64-v8a') }
         buildConfigField 'String', 'ALEJANDRINO_WEB_URL', JsonOutput.toJson(project.findProperty('ALEJANDRINO_WEB_URL') ?: '')

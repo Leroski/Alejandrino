@@ -1,8 +1,9 @@
-import importlib.util
+import importlib
 import io
 import json
 from pathlib import Path
 import tempfile
+import sys
 import unittest
 from unittest.mock import patch
 import yt_dlp
@@ -11,9 +12,8 @@ from yt_dlp.networking.exceptions import HTTPError, TransportError
 from yt_dlp.utils import DownloadError
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('extractor', ROOT / 'android-native/app/src/main/python/extractor.py')
-extractor = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(extractor)
+sys.path.insert(0, str(ROOT / 'android-native/app/src/main/python'))
+extractor = importlib.import_module('alejandrino_media')
 SOURCE = 'https://www.instagram.com/reel/OwnedClip/'
 
 class Guard:
@@ -145,12 +145,25 @@ class RealDownloaderTests(unittest.TestCase):
                             {'Content-Length':str(len(body)), 'Content-Type':'video/mp4'}, 200)
         with tempfile.TemporaryDirectory() as folder, patch.object(yt_dlp.YoutubeDL, 'extract_info', info), \
                 patch.object(yt_dlp.YoutubeDL, 'urlopen', response):
-            result = json.loads(extractor.extract_result(SOURCE, folder, Guard()))
+            result = json.loads(importlib.import_module('alejandrino_media').extract_result(SOURCE, folder, Guard()))
             if 'error_code' not in result:
                 result['video_bytes'] = Path(result['video_path']).read_bytes()
                 result['audio_bytes'] = Path(result['audio_path']).read_bytes() if result['audio_path'] else None
                 result['files'] = sorted(p.name for p in Path(folder).iterdir())
         return result, urls
+
+    def test_preview_then_repeated_downloads_preserve_the_module(self):
+        formats = [{'url':'https://media.example/combined.mp4', 'ext':'mp4', 'vcodec':'h264', 'acodec':'aac'}]
+        def info(ydl, url, download=False):
+            return ydl.process_ie_result({'id':'fixture', 'title':'Technique', 'extractor':'Instagram',
+                'extractor_key':'Instagram', 'webpage_url':url, 'formats':formats}, download=False)
+        with patch.object(yt_dlp.YoutubeDL, 'extract_info', info):
+            self.assertEqual(json.loads(extractor.preview(SOURCE, Guard()))['title'], 'Technique')
+        for _ in range(2):
+            self.assertIs(importlib.import_module('alejandrino_media'), extractor)
+            result, urls = self.download(formats)
+            self.assertNotIn('error_code', result)
+            self.assertEqual(urls, [formats[0]['url']])
 
     def test_progressive_video_and_source_without_audio(self):
         for audio in ['aac', 'none']:

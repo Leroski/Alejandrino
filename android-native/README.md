@@ -1,7 +1,10 @@
-# Alejandrino: descarga, reproducción y vistas previas · 0.5.1
+# Alejandrino: descarga, reproducción y vistas previas · 0.5.2
 
-La versión 0.5.1 consulta automáticamente los metadatos que faltan, usa títulos
-descriptivos y distingue las causas de fallo de descarga. Ver
+La versión 0.5.2 corrige la colisión entre el antiguo módulo `extractor` de la app
+y el cargador de complementos de yt-dlp. La consulta de metadatos podía sustituir
+ese módulo en `sys.modules`, haciendo fallar la siguiente descarga. El puente usa
+ahora `alejandrino_media` y solo se habilitan los extractores incluidos en la APK.
+También reconoce títulos automáticos con «a. m.» y «p. m.». Ver
 [vistas previas, límites y aceptación](../docs/vistas-previas.md).
 
 La APK **Alejandrino prueba** permite guardar/consultar fichas, descargar una
@@ -88,7 +91,8 @@ acciones rechacen solicitudes sin sesión, antes de publicar
 Las pruebas web/JVM/Python usan dobles de red, sesión y almacenamiento. Las pruebas
 instrumentadas usan el Python, yt-dlp, guardia Java, FFmpeg y MediaStore de la APK,
 con video y audio generados y respuestas de red simuladas. Cubren MP4 combinado,
-pistas separadas, fragmentos DASH, originales sin audio y un rechazo HTTP 403;
+pistas separadas, fragmentos DASH, originales sin audio, un rechazo HTTP 403 y
+la secuencia vista previa → descargas repetidas;
 validan las pistas y un fotograma del archivo guardado. No acreditan el acceso
 a una publicación concreta ni una ejecución en ARM64/Samsung.
 

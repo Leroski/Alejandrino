@@ -42,7 +42,7 @@ final class AndroidMediaFiles implements NativeMediaService.Files {
             if (folder.getUsableSpace() < 128L * 1024 * 1024) throw new NativeCheckService.Failure("STORAGE_FAILED");
             JSONObject tracks;
             try {
-                tracks = new JSONObject(Python.getInstance().getModule("extractor").callAttr("extract_result",
+                tracks = new JSONObject(Python.getInstance().getModule("alejandrino_media").callAttr("extract_result",
                     verified.getString("sourceUrl"), folder.getAbsolutePath(), guard).toString());
             } catch (Exception error) { guard.ensureActive(); throw new NativeCheckService.Failure("DOWNLOAD_ENGINE_FAILED"); }
             guard.ensureActive();
