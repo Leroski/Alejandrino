@@ -252,7 +252,9 @@ public final class MainActivity extends Activity {
                 var match = Pattern.compile("https://[^\\s<>\"']+").matcher(text);
                 if (match.find()) {
                     String shared = match.group().replaceAll("[.,;!?)]+$", "");
-                    web.loadUrl(origin.value + "/compartir?text=" + Uri.encode(shared));
+                    String caption = text.replaceAll("https://[^\\s<>\"']+", " ").trim();
+                    if (caption.length() > 200) caption = caption.substring(0, 200);
+                    web.loadUrl(origin.value + "/compartir?url=" + Uri.encode(shared) + "&title=" + Uri.encode(caption));
                     return;
                 }
             }

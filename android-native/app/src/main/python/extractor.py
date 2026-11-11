@@ -2,12 +2,62 @@
 import json
 import math
 import re
+import errno
+import socket
 from pathlib import Path
 from urllib.parse import urlsplit
 import yt_dlp
+from yt_dlp.utils import DownloadError
+from yt_dlp.networking.exceptions import HTTPError, TransportError
 
 MAX_BYTES = 256 * 1024 * 1024
 SAFE_EXTENSIONS = {"mp4", "m4a"}
+
+
+class ExtractionFailure(ValueError):
+    def __init__(self, code):
+        self.code = code
+        super().__init__(code)
+
+
+def failure_code(error):
+    """Only a fixed diagnostic code crosses the bridge, never an exception or signed media URL."""
+    chain, seen = [], set()
+    while error is not None and id(error) not in seen and len(chain) < 8:
+        seen.add(id(error))
+        chain.append(error)
+        detail = getattr(error, "exc_info", None)
+        error = detail[1] if detail and detail[1] else getattr(error, "cause", None) or error.__cause__
+    for item in chain:
+        if isinstance(item, ExtractionFailure):
+            return item.code
+        if isinstance(item, HTTPError):
+            if item.status == 429:
+                return "PROVIDER_RATE_LIMITED"
+            if item.status in (401, 403):
+                return "PROVIDER_ACCESS_REQUIRED"
+            if item.status in (404, 410):
+                return "PROVIDER_UNAVAILABLE"
+        if isinstance(item, OSError) and item.errno == errno.ENOSPC:
+            return "STORAGE_FAILED"
+    message = " ".join(str(item)[:2000].lower() for item in chain)
+    if "429" in message or "rate-limit" in message or "too many requests" in message:
+        return "PROVIDER_RATE_LIMITED"
+    if any(word in message for word in ("login required", "log in", "sign in", "private video", "registered users", "http error 403")):
+        return "PROVIDER_ACCESS_REQUIRED"
+    if any(word in message for word in ("requested format", "no video formats", "missing audio", "missing video", "unsupported track")):
+        return "FORMAT_UNAVAILABLE"
+    if any(isinstance(item, (TransportError, socket.timeout, ConnectionError)) for item in chain):
+        return "DOWNLOAD_NETWORK_FAILED"
+    return "DOWNLOAD_FAILED"
+
+
+def extract_result(url, directory, guard):
+    try:
+        return extract(url, directory, guard)
+    except Exception as error:
+        # Java checks the guard again, so cancellation/expiry always takes precedence.
+        return json.dumps({"error_code": failure_code(error)})
 
 
 def valid_source(url):
@@ -34,7 +84,7 @@ def choose_tracks(info):
     if video is None:
         raise ValueError("Missing video")
     audio = next((f for f in formats if f is not video and f.get("vcodec") == "none" and f.get("acodec") != "none"), None)
-    if (len(formats) == 2 and audio is None) or (audio is None and video.get("acodec") == "none"):
+    if len(formats) == 2 and audio is None:
         raise ValueError("Missing audio")
     return video, audio
 
@@ -62,7 +112,7 @@ def public_metadata(info):
 
 
 def preview(url, guard):
-    """Read public text only on an explicit refresh; never download audiovisual data."""
+    """Read public metadata; never download audiovisual data."""
     if not valid_source(url):
         raise ValueError("Unsupported source")
     if guard.isStopped():
@@ -90,10 +140,10 @@ def extract(url, directory, guard):
         if guard.isStopped():
             raise RuntimeError("Cancelled")
         if progress and completed_bytes + (progress.get("downloaded_bytes") or 0) > MAX_BYTES:
-            raise ValueError("Download too large")
+            raise ExtractionFailure("FILE_TOO_LARGE")
 
     opts = {
-        "format": "bv[ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
+        "format": "bv[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv[ext=mp4]",
         "format_sort": ["res:720", "vcodec:h264", "acodec:aac"],
         "noplaylist": True, "quiet": True, "noprogress": True,
         "logger": QuietLogger(), "overwrites": False, "socket_timeout": 15,
@@ -110,25 +160,47 @@ def extract(url, directory, guard):
         if not info or info.get("_type") in {"playlist", "multi_video"} or info.get("is_live"):
             raise ValueError("Unsupported publication")
         video, audio = choose_tracks(info)
-        paths = {}
-        for role, fmt in (("video", video), ("audio", audio)):
-            if fmt is None:
-                continue
-            check()
-            ext = str(fmt.get("ext") or "").lower()
-            if ext not in SAFE_EXTENSIONS:
-                raise ValueError("Unsupported track format")
-            target = folder / f"{role}.{ext}"
-            stream = dict(info)
-            stream.pop("requested_formats", None)
-            stream.pop("requested_downloads", None)
-            stream.update(fmt)
-            success, _ = ydl.dl(str(target), stream)
-            check()
-            if not success or not target.is_file() or target.stat().st_size == 0:
-                raise RuntimeError("Incomplete track")
-            completed_bytes += target.stat().st_size
-            if completed_bytes > MAX_BYTES:
-                raise ValueError("Download too large")
-            paths[role] = str(target)
-    return json.dumps({"video_path": paths["video"], "audio_path": paths.get("audio"), "metadata": public_metadata(info)})
+        # A publication can expose DASH tracks which fail while its progressive MP4 works.
+        # Retry at most one public alternate; never reuse a partial file from the first attempt.
+        fallback = next((f for f in reversed(info.get("formats") or [])
+                         if f.get("ext") == "mp4" and f.get("vcodec") != "none"
+                         and f.get("acodec") != "none" and f.get("url") != video.get("url")
+                         and f.get("protocol") in ("http", "https")), None)
+        candidates = [(video, audio)] + ([(fallback, None)] if fallback else [])
+        for attempt, (video, audio) in enumerate(candidates):
+            paths = {}
+            completed_bytes = 0
+            try:
+                for role, fmt in (("video", video), ("audio", audio)):
+                    if fmt is None:
+                        continue
+                    check()
+                    if (fmt.get("filesize") or 0) + completed_bytes > MAX_BYTES:
+                        raise ExtractionFailure("FILE_TOO_LARGE")
+                    ext = str(fmt.get("ext") or "").lower()
+                    if ext not in SAFE_EXTENSIONS:
+                        raise ValueError("Unsupported track format")
+                    target = folder / f"{role}-{attempt}.{ext}"
+                    stream = dict(info)
+                    for key in ("requested_formats", "requested_downloads", "fragments", "fragment_base_url", "protocol", "manifest_url"):
+                        stream.pop(key, None)
+                    stream.update(fmt)
+                    success, _ = ydl.dl(str(target), stream)
+                    check()
+                    if not success or not target.is_file() or target.stat().st_size == 0:
+                        raise DownloadError("Incomplete track")
+                    completed_bytes += target.stat().st_size
+                    if completed_bytes > MAX_BYTES:
+                        raise ExtractionFailure("FILE_TOO_LARGE")
+                    paths[role] = str(target)
+                break
+            except (DownloadError, HTTPError, TransportError) as error:
+                check()
+                if attempt + 1 == len(candidates) or failure_code(error) in {"PROVIDER_RATE_LIMITED", "FILE_TOO_LARGE", "STORAGE_FAILED"}:
+                    raise
+                for partial in folder.iterdir():
+                    if partial.is_file():
+                        partial.unlink()
+    return json.dumps({"video_path": paths["video"], "audio_path": paths.get("audio"),
+                       "audio_required": audio is not None or video.get("acodec") != "none",
+                       "metadata": public_metadata(info)})

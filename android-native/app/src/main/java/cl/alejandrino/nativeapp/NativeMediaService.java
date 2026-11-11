@@ -51,9 +51,11 @@ final class NativeMediaService {
                 guard.ensureActive();
             });
             return response(identity, "DOWNLOAD", "AVAILABLE")
-                .put("width", quality.getInt("width")).put("height", quality.getInt("height"));
+                .put("width", quality.getInt("width")).put("height", quality.getInt("height"))
+                .put("hasAudio", quality.optBoolean("hasAudio", true));
         } catch (NativeCheckService.Failure error) { return error(identity, action, error.code); }
-        catch (Exception | LinkageError error) { return error(identity, action, "OPEN".equals(action) ? "OPEN_FAILED" : "DOWNLOAD_FAILED"); }
+        catch (LinkageError error) { return error(identity, action, "OPEN".equals(action) ? "OPEN_FAILED" : "DOWNLOAD_ENGINE_FAILED"); }
+        catch (Exception error) { return error(identity, action, "OPEN".equals(action) ? "OPEN_FAILED" : "DOWNLOAD_FAILED"); }
     }
     static JSONObject response(JSONObject identity, String action, String type) throws Exception {
         return NativeCheckService.envelope(identity, type).put("action", action);

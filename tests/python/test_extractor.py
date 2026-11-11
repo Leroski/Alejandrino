@@ -1,10 +1,14 @@
 import importlib.util
+import io
 import json
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 import yt_dlp
+from yt_dlp.networking.common import Response
+from yt_dlp.networking.exceptions import HTTPError, TransportError
+from yt_dlp.utils import DownloadError
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('extractor', ROOT / 'android-native/app/src/main/python/extractor.py')
@@ -53,11 +57,12 @@ class ExtractionTests(unittest.TestCase):
                     'https://u:p@instagram.com/reel/x/', 'https://instagram.com:8443/reel/x/',
                     'http://instagram.com/reel/x/', 'https://127.0.0.1/reel/x/', SOURCE+'?cookie=x', SOURCE+'\n']:
             self.assertFalse(extractor.valid_source(url),url)
-    def test_audio_required_and_two_track_selection(self):
+    def test_two_track_selection_and_explicitly_silent_sources(self):
         video={'vcodec':'h264','acodec':'none','ext':'mp4'}
         audio={'vcodec':'none','acodec':'aac','ext':'m4a'}
         self.assertEqual(extractor.choose_tracks({'requested_formats':[audio,video]}),(video,audio))
-        for info in [video,audio,{'requested_formats':[video,dict(video)]},{'requested_formats':[video,audio,audio]}]:
+        self.assertEqual(extractor.choose_tracks(video), (video, None))
+        for info in [audio,{'requested_formats':[video,dict(video)]},{'requested_formats':[video,audio,audio]}]:
             with self.assertRaises(ValueError):
                 extractor.choose_tracks(info)
     def test_progressive_download_is_bounded_quiet_and_no_credentials(self):
@@ -74,7 +79,7 @@ class ExtractionTests(unittest.TestCase):
             guard=Guard();guard.stopped=mode=='cancel'
             FakeYdl.fail=mode=='failure'; FakeYdl.overflow=mode=='overflow'
             with tempfile.TemporaryDirectory() as folder, patch.object(extractor.yt_dlp,'YoutubeDL',FakeYdl):
-                with self.assertRaises((RuntimeError,ValueError)):
+                with self.assertRaises((RuntimeError,ValueError,DownloadError)):
                     extractor.extract(SOURCE,folder,guard)
     def test_no_playlist_or_live_download(self):
         for info in [{'_type':'playlist'}, {'_type':'multi_video'}, {'is_live':True}]:
@@ -109,6 +114,72 @@ class ExtractionTests(unittest.TestCase):
         guard=Guard(); guard.stopped=True
         with patch.object(extractor.yt_dlp,'YoutubeDL',side_effect=AssertionError('No network')):
             with self.assertRaises(RuntimeError): extractor.preview(SOURCE,guard)
+
+    def test_diagnostics_are_bounded_and_do_not_return_provider_messages(self):
+        cases = [(TransportError('private signed URL'), 'DOWNLOAD_NETWORK_FAILED'),
+                 (DownloadError('Requested format is not available'), 'FORMAT_UNAVAILABLE'),
+                 (extractor.ExtractionFailure('FILE_TOO_LARGE'), 'FILE_TOO_LARGE'),
+                 (RuntimeError('private unknown detail'), 'DOWNLOAD_FAILED')]
+        for status, code in [(401, 'PROVIDER_ACCESS_REQUIRED'), (403, 'PROVIDER_ACCESS_REQUIRED'),
+                             (404, 'PROVIDER_UNAVAILABLE'), (429, 'PROVIDER_RATE_LIMITED')]:
+            cases.append((HTTPError(Response(io.BytesIO(), 'https://private.example/token', {}, status)), code))
+        for error, code in cases:
+            wrapped = DownloadError('provider private details', exc_info=(type(error), error, None))
+            with patch.object(extractor, 'extract', side_effect=wrapped):
+                self.assertEqual(json.loads(extractor.extract_result(SOURCE, '/unused', Guard())), {'error_code': code})
+
+
+class RealDownloaderTests(unittest.TestCase):
+    """Real yt-dlp format selection and HTTP downloader; only provider/network IO is replaced."""
+    def download(self, formats, reject_url=None):
+        urls = []
+        def info(ydl, url, download=False):
+            return ydl.process_ie_result({'id':'fixture', 'title':'Technique', 'extractor':'Instagram',
+                'extractor_key':'Instagram', 'webpage_url':url, 'formats':formats}, download=False)
+        def response(ydl, request):
+            urls.append(request.url)
+            if request.url == reject_url:
+                raise HTTPError(Response(io.BytesIO(), request.url, {}, 403))
+            body = ('bytes:' + request.url).encode()
+            return Response(io.BytesIO(body), request.url,
+                            {'Content-Length':str(len(body)), 'Content-Type':'video/mp4'}, 200)
+        with tempfile.TemporaryDirectory() as folder, patch.object(yt_dlp.YoutubeDL, 'extract_info', info), \
+                patch.object(yt_dlp.YoutubeDL, 'urlopen', response):
+            result = json.loads(extractor.extract_result(SOURCE, folder, Guard()))
+            if 'error_code' not in result:
+                result['video_bytes'] = Path(result['video_path']).read_bytes()
+                result['audio_bytes'] = Path(result['audio_path']).read_bytes() if result['audio_path'] else None
+                result['files'] = sorted(p.name for p in Path(folder).iterdir())
+        return result, urls
+
+    def test_progressive_video_and_source_without_audio(self):
+        for audio in ['aac', 'none']:
+            url = 'https://media.example/progressive.mp4'
+            result, urls = self.download([{'url':url, 'ext':'mp4', 'vcodec':'h264', 'acodec':audio}])
+            self.assertEqual(urls, [url])
+            self.assertEqual(result['video_bytes'], ('bytes:'+url).encode())
+            self.assertEqual(result['audio_required'], audio != 'none')
+            self.assertIsNone(result['audio_path'])
+
+    def test_separate_audio_is_downloaded_and_never_silently_discarded(self):
+        formats = [{'url':'https://media.example/video.mp4', 'ext':'mp4', 'vcodec':'h264', 'acodec':'none'},
+                   {'url':'https://media.example/audio.m4a', 'ext':'m4a', 'vcodec':'none', 'acodec':'aac'}]
+        result, urls = self.download(formats)
+        self.assertEqual(len(urls), 2)
+        self.assertTrue(result['audio_required'])
+        self.assertIn(b'audio.m4a', result['audio_bytes'])
+        failed, _ = self.download(formats, reject_url=formats[1]['url'])
+        self.assertEqual(failed, {'error_code':'PROVIDER_ACCESS_REQUIRED'})
+
+    def test_one_progressive_fallback_removes_failed_attempt_files(self):
+        formats = [{'url':'https://media.example/video.mp4', 'ext':'mp4', 'vcodec':'h264', 'acodec':'none', 'height':720},
+                   {'url':'https://media.example/audio.m4a', 'ext':'m4a', 'vcodec':'none', 'acodec':'aac'},
+                   {'url':'https://media.example/combined.mp4', 'ext':'mp4', 'vcodec':'h264', 'acodec':'aac', 'height':720}]
+        result, urls = self.download(formats, reject_url=formats[1]['url'])
+        self.assertEqual(urls, [formats[0]['url'], formats[1]['url'], formats[2]['url']])
+        self.assertIn(b'combined.mp4', result['video_bytes'])
+        self.assertEqual(result['files'], ['video-1.mp4'])
+        self.assertTrue(result['audio_required'])
 
 if __name__ == '__main__':
     unittest.main()

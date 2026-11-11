@@ -7,13 +7,15 @@ const ts = require('typescript');
 const root = path.resolve(__dirname, '..');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'alejandrino-preview-'));
 for (const dir of ['lib', 'types']) fs.mkdirSync(path.join(temp, dir));
-for (const name of ['lib/native-protocol', 'lib/native-preview-client', 'types/video-metadata']) {
+for (const name of ['lib/native-protocol', 'lib/native-preview-client', 'types/video-metadata', 'lib/video-title', 'lib/preview-refresh-policy']) {
   fs.writeFileSync(path.join(temp, name + '.js'), ts.transpileModule(fs.readFileSync(path.join(root, 'app', name + '.ts'), 'utf8'),
     { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText);
 }
 test.after(() => fs.rmSync(temp, { recursive: true, force: true }));
 const { NativePreviewClient, parseNativePreview } = require(path.join(temp, 'lib/native-preview-client.js'));
 const { safeThumbnail, formatDuration } = require(path.join(temp, 'types/video-metadata.js'));
+const { videoTitle, sharedTitle, contentTitle } = require(path.join(temp, 'lib/video-title.js'));
+const { needsPreviewMetadata, claimPreviewRefresh } = require(path.join(temp, 'lib/preview-refresh-policy.js'));
 const input = { userId: '123e4567-e89b-42d3-a456-426614174000', techniqueId: '019321ab-cdef-7abc-8def-0123456789ab', accessToken: 'synthetic.test.token' };
 const preview = () => ({ metadata: { title: 'Título original', author: 'Autor', description: '', thumbnail_url: '', duration: 62 },
   available: true, image: 'data:image/jpeg;base64,/9j/AA==', frame: 0, duration: 62, metadataFailed: false, frameFailed: false });
@@ -87,4 +89,33 @@ test('invalid requests never reach the native bridge; provider failure keeps a u
   const p = t.client.run(input, { refresh: true }, signal);
   const retained = { ...preview(), metadataFailed: true };
   t.reply(t.sent[0], { preview: retained }); assert.deepEqual(await p, retained);
+});
+
+test('descriptive captions replace generated titles, never personal names', () => {
+  const metadata = { title: 'Video by judoka', description: '  Entrada de uchi-mata\ncon agarre de manga. https://example.com  ' };
+  assert.equal(contentTitle(metadata), 'Entrada de uchi-mata con agarre de manga.');
+  for (const name of ['Video guardado', 'Instagram · 10-11, 23:50', 'TikTok · 11/11 00:20'])
+    assert.equal(videoTitle(name, metadata), contentTitle(metadata));
+  for (const name of ['Mi entrada de judo', 'Instagram · mi análisis', 'Uchi-mata'])
+    assert.equal(videoTitle(name, metadata), name);
+  assert.equal(videoTitle('Video guardado', { title: 'Video by judoka' }), 'Video guardado');
+  assert.equal(contentTitle({ title: 'Título útil', description: 'Descripción' }), 'Título útil');
+  assert.equal(sharedTitle('Entrada de seoi nage https://instagram.com/reel/Example/'), 'Entrada de seoi nage');
+  assert.equal(sharedTitle('https://instagram.com/reel/Example/'), '');
+  assert.equal(contentTitle({ description: 'x'.repeat(300) }).length, 200);
+});
+
+test('missing covers/context refresh automatically with per-account cooldown and manual retry', () => {
+  const ready = preview();
+  assert.equal(needsPreviewMetadata(ready), false);
+  assert.equal(needsPreviewMetadata({ ...ready, image: '' }), true);
+  assert.equal(needsPreviewMetadata({ ...ready, metadata: { ...ready.metadata, title: 'Video by author' } }), true);
+  assert.equal(needsPreviewMetadata({ ...ready, image: '', metadata: { ...ready.metadata,
+    thumbnail_url: 'https://scontent.cdninstagram.com/cover.jpg' } }), false);
+  const key = 'user-A:clip-A';
+  assert.equal(claimPreviewRefresh(key, false, 1000), true);
+  assert.equal(claimPreviewRefresh(key, false, 1001), false);
+  assert.equal(claimPreviewRefresh('user-B:clip-A', false, 1001), true);
+  assert.equal(claimPreviewRefresh(key, true, 1002), true);
+  assert.equal(claimPreviewRefresh(key, false, 301002), true);
 });

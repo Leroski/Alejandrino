@@ -16,6 +16,10 @@ export default function Library({ user }: { user: User }) {
   const [techniques, setTechniques] = useState<Technique[]>([]);
   const [url, setUrl] = useState("");
   const [query, setQuery] = useState("");
+  const [previewText, setPreviewText] = useState<Record<string, string>>({});
+  const rememberPreviewText = useCallback((id: string, text: string) => {
+    setPreviewText(previous => previous[id] === text || !text.trim() ? previous : { ...previous, [id]: text });
+  }, []);
   const [onlyPending, setOnlyPending] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(true);
@@ -158,7 +162,7 @@ export default function Library({ user }: { user: User }) {
   const needle = searchable(query.trim());
   const visible = techniques.filter(item => (!onlyPending || isPending(item)) &&
     searchable([item.name, item.discipline, item.position, item.category, item.source, item.url,
-      metadata[item.id]?.title, metadata[item.id]?.author].join(" ")).includes(needle));
+      metadata[item.id]?.title, metadata[item.id]?.author, previewText[item.id]].join(" ")).includes(needle));
 
   return (
     <>
@@ -208,6 +212,7 @@ export default function Library({ user }: { user: User }) {
           : <div className="grid gap-4">{visible.map(item => <TechniqueCard key={item.id} technique={item}
             disabled={busy} onUpdate={update} onDelete={remove}
             metadata={metadata[item.id]} metadataBusy={!!metadataRunning[item.id]}
+            onPreviewText={rememberPreviewText}
             onRefreshMetadata={() => void refreshMetadata(item.id)} />)}</div>}
       </section>
       <details className="mt-8 rounded-2xl border border-zinc-800 p-4 text-sm text-zinc-400">

@@ -95,4 +95,17 @@ public class NativeMediaServiceTest {
             "https://www.instagram.com/","https://www.instagram.com/reel/x/?token=x","https://127.0.0.1/reel/x/"})
             assertThrows(NativeCheckService.Failure.class,()->DownloadSource.validate(url));
     }
+
+    @Test public void missingEngineIsDistinguishedWithoutLeakingNativeDetails() throws Exception {
+        Files files = new Files() {
+            @Override public JSONObject download(JSONObject verified, DownloadGuard guard, Consumer<String> stages,
+                    NativeMediaService.BeforePublish beforePublish) {
+                throw new UnsatisfiedLinkError("private library path");
+            }
+        };
+        NativeMediaService service = new NativeMediaService((m,t) -> approved(m), files);
+        JSONObject result = service.handle(request("DOWNLOAD").toString(), new DownloadGuard(1000), p -> {});
+        assertEquals("DOWNLOAD_ENGINE_FAILED", result.getString("errorCode"));
+        assertFalse(result.toString().contains("private"));
+    }
 }

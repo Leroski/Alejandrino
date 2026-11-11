@@ -64,7 +64,8 @@ export default function LocalVideoStatus({ userId, techniqueId, sourceUrl, disab
         });
         if (!controller.signal.aborted) {
           setState("available");
-          if (result.type === "AVAILABLE" && result.width && result.height) setQuality(`${result.width} × ${result.height} · con audio`);
+          if (result.type === "AVAILABLE" && result.width && result.height)
+            setQuality(`${result.width} × ${result.height} · ${result.hasAudio === false ? "sin audio de origen" : "con audio"}`);
           if (action === "DOWNLOAD") onLocalChange?.();
         }
       }

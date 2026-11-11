@@ -50,7 +50,8 @@ export class NativeMediaClient {
       ["authorizing", "downloading", "merging", "saving"].includes(String(value.stage))) progress(value.stage as MediaStage);
     else if (value.type === "AVAILABLE" && request.type === "DOWNLOAD") {
       const validSize = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n > 0 && n <= 16384;
-      finish({ type: "AVAILABLE", ...(validSize(value.width) && validSize(value.height) ? { width: value.width, height: value.height } : {}) });
+      finish({ type: "AVAILABLE", ...(validSize(value.width) && validSize(value.height) ? { width: value.width, height: value.height } : {}),
+        ...(typeof value.hasAudio === "boolean" ? { hasAudio: value.hasAudio } : {}) });
     } else if (value.type === "OPENED" && request.type === "OPEN") finish({ type: "OPENED" });
     else finish(undefined, new NativeCheckError("BAD_RESPONSE"));
   }

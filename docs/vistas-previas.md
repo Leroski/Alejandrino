@@ -1,4 +1,4 @@
-# Vistas previas en Android · 0.5.0
+# Vistas previas en Android · 0.5.1
 
 La fase de vista previa añade portadas del MP4 local, tres posiciones seleccionables,
 duración, autor, descripción y título original. El título de la ficha se sigue
@@ -7,6 +7,14 @@ editando y sincronizando por el flujo existente; actualizar metadatos no lo camb
 ## Uso
 
 - Las copias descargadas muestran una portada al entrar en pantalla.
+- Si faltan portada o descripción útil, se consulta automáticamente el proveedor
+  después de mostrar los datos locales. Cada ficha tiene un intervalo de cinco
+  minutos entre intentos automáticos durante la sesión de página; la consulta
+  manual permite reintentar antes. No se descarga el video para obtener metadatos.
+- Los nombres provisionales antiguos (plataforma y hora) se muestran usando el
+  título original o la descripción, sin sobrescribir nombres personales en Supabase.
+  Si no hay contexto disponible se muestra «Video guardado», sin inventar contenido.
+  Los textos compartidos con el enlace se conservan como título inicial.
 - **Cambiar portada** recorre fotogramas cercanos al 15 %, 50 % y 80 % del video.
   Se guarda la selección en este dispositivo. Si el formato solo ofrece pocos
   fotogramas clave, dos opciones pueden ser iguales.
@@ -15,7 +23,8 @@ editando y sincronizando por el flujo existente; actualizar metadatos no lo camb
   proveedor desde la APK, sin descargar el video. El resultado depende del proveedor.
 - **Editar** cambia el título personal y clasificación. **Usar el título original**
   copia explícitamente ese texto al borrador, sin guardarlo hasta confirmar.
-- La descripción original se puede desplegar debajo de la ficha.
+- La plataforma, fecha de guardado, URL y descripción se despliegan en **Detalles del video**.
+  La búsqueda incluye los textos nativos ya cargados durante esa apertura de la biblioteca.
 
 ## Límites de esta entrega
 
@@ -27,8 +36,9 @@ sin enviar acciones nuevas a un puente que no existe.
 
 La interfaz web y la comprobación de sesión/ficha siguen requiriendo conexión.
 Esta entrega no implementa la biblioteca completamente offline ni análisis con IA.
-Una lectura inicial de portada utiliza el archivo y metadatos locales; solo
-**Actualizar datos** consulta de nuevo Instagram/TikTok.
+Una lectura inicial utiliza primero el archivo y metadatos locales; si faltan
+portada o contexto se consulta Instagram/TikTok automáticamente. Un fallo del
+proveedor conserva la información previa y permite reintentar manualmente.
 
 ## Implementación y aislamiento
 
@@ -53,12 +63,11 @@ Una lectura inicial de portada utiliza el archivo y metadatos locales; solo
 
 ## Verificación
 
-La batería incluye 39 pruebas Node, 22 JVM, 9 Python y 52 comprobaciones del
-contrato UUID. TypeScript, ESLint y la compilación web se verifican también.
+La batería incluye pruebas Node, JVM, Python y comprobaciones del contrato UUID.
+TypeScript, ESLint y la compilación web se verifican también.
 La compilación completa Android y el test de Chromium se ejecutan en CI;
 el entorno local de desarrollo no dispone de Android SDK ni de un Chromium operativo.
-El commit comprobado y sus resultados se pueden consultar en el
-[PR #9](https://github.com/Leroski/Alejandrino/pull/9).
+El resultado de cada commit se registra en GitHub Actions.
 
 Pruebas de Node: contrato, límites, cancelación, aislamiento, serialización de fichas,
 respuestas tardías, dominios permitidos y compatibilidad con las operaciones previas.
@@ -66,6 +75,9 @@ Pruebas JVM: autorización antes de leer archivos, revalidación tras consultar 
 validación de opciones y exclusión de campos privados.
 Pruebas Python: metadatos acotados, ausencia de descargas durante la consulta,
 cancelación y regresiones de la descarga de pistas.
+La selección de formatos y el descargador HTTP real de yt-dlp también se prueban
+con respuestas de red controladas: MP4 combinado, pistas separadas, original
+sin audio, rechazo de una pista y alternativa sin reutilizar archivos parciales.
 
 El workflow Android compila, ejecuta JUnit y Android Lint. El workflow web ejecuta
 `tests/browser/preview.cjs` con Chromium y respuestas sintéticas de Supabase/Android:
@@ -85,7 +97,8 @@ iniciar Next en el puerto 3015 con
 1. Actualizar conservando paquete, firma beta y datos; no desinstalar la versión anterior.
 2. Abrir una ficha con MP4 existente y comprobar portada, duración y reproducción.
 3. Cambiar portada, cerrar y volver a abrir: comprobar que conserva la selección.
-4. Consultar los datos de un reel anterior. Editar su título y actualizar datos:
+4. Guardar un enlace nuevo y comprobar que obtiene portada y descripción sin
+   pulsar Actualizar datos. Editar su título y actualizar datos:
    el título personal debe mantenerse.
 5. Descargar un nuevo reel: debe conservar imagen y sonido, asociarse a la misma
    ficha y mostrar metadatos disponibles sin una segunda descarga.

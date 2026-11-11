@@ -4,7 +4,7 @@ export type MediaAction = "DOWNLOAD" | "OPEN";
 export type MediaRequest = Omit<CheckRequest, "type"> & { type: MediaAction };
 export type AuthorizedRequest = CheckRequest | MediaRequest;
 export type MediaStage = "authorizing" | "downloading" | "merging" | "saving";
-export type MediaResult = { type: "AVAILABLE"; width?: number; height?: number } | { type: "OPENED" };
+export type MediaResult = { type: "AVAILABLE"; width?: number; height?: number; hasAudio?: boolean } | { type: "OPENED" };
 
 export function parseAuthorizedRequest(value: unknown): AuthorizedRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new NativeCheckError("BAD_REQUEST");

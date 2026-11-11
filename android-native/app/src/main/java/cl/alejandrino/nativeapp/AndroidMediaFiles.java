@@ -42,10 +42,11 @@ final class AndroidMediaFiles implements NativeMediaService.Files {
             if (folder.getUsableSpace() < 128L * 1024 * 1024) throw new NativeCheckService.Failure("STORAGE_FAILED");
             JSONObject tracks;
             try {
-                tracks = new JSONObject(Python.getInstance().getModule("extractor").callAttr("extract",
+                tracks = new JSONObject(Python.getInstance().getModule("extractor").callAttr("extract_result",
                     verified.getString("sourceUrl"), folder.getAbsolutePath(), guard).toString());
-            } catch (Exception error) { guard.ensureActive(); throw new NativeCheckService.Failure("DOWNLOAD_FAILED"); }
+            } catch (Exception error) { guard.ensureActive(); throw new NativeCheckService.Failure("DOWNLOAD_ENGINE_FAILED"); }
             guard.ensureActive();
+            DownloadErrors.check(tracks);
             File video = localTrack(folder, tracks.getString("video_path"));
             File audio = tracks.isNull("audio_path") ? null : localTrack(folder, tracks.getString("audio_path"));
             File output = new File(folder, "final.mp4");
@@ -53,9 +54,10 @@ final class AndroidMediaFiles implements NativeMediaService.Files {
             if (bytes > 256L * 1024 * 1024 || folder.getUsableSpace() < bytes * 2 + 32L * 1024 * 1024)
                 throw new NativeCheckService.Failure("STORAGE_FAILED");
             progress.accept("merging");
-            remux(video, audio, output, guard);
+            boolean audioRequired = tracks.optBoolean("audio_required", true);
+            remux(video, audio, output, audioRequired, guard);
             guard.ensureActive();
-            JSONObject quality = inspect(output);
+            JSONObject quality = inspect(output, audioRequired);
             progress.accept("saving");
             publish(output, verified.getString("userId"), verified.getString("techniqueId"), guard, beforePublish);
             // Optional preview data must never turn a completed download into a failure.
@@ -70,12 +72,12 @@ final class AndroidMediaFiles implements NativeMediaService.Files {
             throw new NativeCheckService.Failure("MEDIA_INVALID");
         return file;
     }
-    private static void remux(File video, File audio, File output, DownloadGuard guard) throws Exception {
+    private static void remux(File video, File audio, File output, boolean audioRequired, DownloadGuard guard) throws Exception {
         List<String> args = new ArrayList<>(List.of("-y", "-nostdin", "-loglevel", "error",
             "-protocol_whitelist", "file,pipe", "-i", video.getAbsolutePath()));
         if (audio != null) args.addAll(List.of("-protocol_whitelist", "file,pipe", "-i", audio.getAbsolutePath()));
         // Always create a real MP4, including when the source already combines both tracks.
-        args.addAll(List.of("-map", "0:v:0", "-map", audio == null ? "0:a:0" : "1:a:0", "-c", "copy",
+        args.addAll(List.of("-map", "0:v:0", "-map", audio == null ? (audioRequired ? "0:a:0" : "0:a:0?") : "1:a:0", "-c", "copy",
             "-movflags", "+faststart", output.getAbsolutePath()));
         CountDownLatch finished = new CountDownLatch(1);
         var session = FFmpegKit.executeWithArgumentsAsync(args.toArray(new String[0]), result -> finished.countDown());
@@ -89,7 +91,7 @@ final class AndroidMediaFiles implements NativeMediaService.Files {
             throw error;
         }
     }
-    private static JSONObject inspect(File output) throws Exception {
+    private static JSONObject inspect(File output, boolean audioRequired) throws Exception {
         if (!output.isFile() || output.length() == 0 || output.length() > 260L * 1024 * 1024)
             throw new NativeCheckService.Failure("MEDIA_INVALID");
         try (MediaMetadataRetriever media = new MediaMetadataRetriever()) {
@@ -97,11 +99,12 @@ final class AndroidMediaFiles implements NativeMediaService.Files {
             int width = Integer.parseInt(media.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH));
             int height = Integer.parseInt(media.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT));
             long duration = Long.parseLong(media.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
-            if (!"yes".equals(media.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO)) ||
+            boolean hasAudio = "yes".equals(media.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO));
+            if ((audioRequired && !hasAudio) ||
                 !"yes".equals(media.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO)) ||
                 width <= 0 || height <= 0 || width > 16384 || height > 16384 || duration <= 0)
                 throw new NativeCheckService.Failure("MEDIA_INVALID");
-            return new JSONObject().put("width", width).put("height", height);
+            return new JSONObject().put("width", width).put("height", height).put("hasAudio", hasAudio);
         } catch (Exception error) { throw new NativeCheckService.Failure("MEDIA_INVALID"); }
     }
     private void publish(File output, String user, String technique, DownloadGuard guard,
