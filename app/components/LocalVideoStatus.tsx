@@ -76,7 +76,8 @@ export default function LocalVideoStatus({ userId, techniqueId, sourceUrl, disab
   }
 
   if (!native) return null;
-  const visibleState = state === "idle" && availability ? availability : state;
+  // A refreshed preview can discover deletion after an earlier CHECK or OPEN.
+  const visibleState = state === "error" ? state : availability ?? state;
   const button = "min-h-11 rounded-xl bg-zinc-800 px-3 py-3 text-sm focus-visible:outline-2 focus-visible:outline-red-400 disabled:opacity-50";
   return <div className="mt-3 grid gap-2">
     <p role="status" aria-live="polite" className="text-sm text-zinc-300">

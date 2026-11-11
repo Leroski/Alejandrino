@@ -98,15 +98,20 @@ const techniqueId = '019321ab-cdef-7abc-8def-0123456789ab';
           fs.mkdirSync(process.env.PREVIEW_QA_OUTPUT, { recursive: true });
           await page.screenshot({ path: path.join(process.env.PREVIEW_QA_OUTPUT, 'preview-mobile.png'), fullPage: true });
         }
+        // A successful CHECK must not mask deletion discovered by a later preview.
+        await page.getByRole('button', { name: 'Comprobar video local', exact: true }).click();
+        await page.getByRole('button', { name: 'Comprobar video local', exact: true }).waitFor();
+        await page.waitForFunction(() => !Array.from(document.querySelectorAll('button')).some(button => button.textContent.trim() === 'Consultando…'));
         await page.evaluate(() => window.__previewMode = 'missing');
         await page.getByRole('button', { name: 'Actualizar datos', exact: true }).click();
         await page.getByText('No descargado en este dispositivo', { exact: true }).waitFor();
         assert.equal(await page.locator('article img').count(), 0);
+        assert.equal(await page.getByRole('button', { name: 'Reproducir video local', exact: true }).count(), 0);
         await page.evaluate(() => window.__previewMode = 'silent');
         await page.getByRole('button', { name: 'Actualizar datos', exact: true }).click();
         await page.getByRole('button', { name: 'Consultando…', exact: true }).waitFor();
         await page.getByRole('button', { name: 'Salir', exact: true }).click();
-        await page.getByRole('button', { name: 'Iniciar sesión', exact: true }).waitFor();
+        await page.getByRole('button', { name: 'Entrar', exact: true }).waitFor();
         await page.evaluate(() => window.AlejandrinoPreviewV1.onmessage?.({ data: JSON.stringify({
           ...window.__lastPreview, type: 'PREVIEW_RESULT', action: 'PREVIEW', preview: {} }) }));
         assert.equal(await page.locator('article img').count(), 0);

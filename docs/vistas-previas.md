@@ -53,12 +53,12 @@ Una lectura inicial de portada utiliza el archivo y metadatos locales; solo
 
 ## Verificación
 
-Estado al 9 de noviembre de 2026: 39 pruebas Node, 22 JVM y 9 Python aprobadas,
-además de 52 comprobaciones del contrato UUID. TypeScript, ESLint y la compilación
-web se verifican localmente. La compilación completa Android y el test de navegador
-quedan pendientes de CI: no hay Android SDK local y Chromium no puede iniciarse
-en este entorno. La rama aún no se ha publicado; el control automático exige
-autorización explícita para subir el código al repositorio público.
+La batería incluye 39 pruebas Node, 22 JVM, 9 Python y 52 comprobaciones del
+contrato UUID. TypeScript, ESLint y la compilación web se verifican también.
+La compilación completa Android y el test de Chromium se ejecutan en CI;
+el entorno local de desarrollo no dispone de Android SDK ni de un Chromium operativo.
+El commit comprobado y sus resultados se pueden consultar en el
+[PR #9](https://github.com/Leroski/Alejandrino/pull/9).
 
 Pruebas de Node: contrato, límites, cancelación, aislamiento, serialización de fichas,
 respuestas tardías, dominios permitidos y compatibilidad con las operaciones previas.
@@ -70,7 +70,8 @@ cancelación y regresiones de la descarga de pistas.
 El workflow Android compila, ejecuta JUnit y Android Lint. El workflow web ejecuta
 `tests/browser/preview.cjs` con Chromium y respuestas sintéticas de Supabase/Android:
 portada, cambio de selección, edición con espacios, conservación del título,
-fallo del proveedor, archivo ausente, cierre de sesión y compatibilidad web/APK anterior.
+fallo del proveedor, archivo ausente tras una comprobación previa satisfactoria,
+cierre de sesión y compatibilidad web/APK anterior.
 Estas pruebas no equivalen a comprobar un MP4 real en un teléfono.
 
 Para repetir las pruebas de navegador, instalar Playwright 1.62.1 y su Chromium,
