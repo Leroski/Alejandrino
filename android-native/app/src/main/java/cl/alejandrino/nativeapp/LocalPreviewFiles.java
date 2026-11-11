@@ -58,7 +58,7 @@ final class LocalPreviewFiles implements NativePreviewService.Files {
         if (refresh) {
             JSONObject updated = null;
             try {
-                updated = new JSONObject(Python.getInstance().getModule("extractor").callAttr("preview", source, guard).toString());
+                updated = new JSONObject(Python.getInstance().getModule("alejandrino_media").callAttr("preview", source, guard).toString());
             } catch (Exception error) { guard.ensureActive(); metadataFailed = true; }
             if (updated != null) {
                 verify.verify();

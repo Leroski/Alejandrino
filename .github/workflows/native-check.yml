@@ -62,7 +62,57 @@ jobs:
           retention-days: 5
           if-no-files-found: ignore
 
+  android-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [29, 35]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Generate synthetic video and audio for Android tests
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          bash scripts/create-media-test-fixtures.sh
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise Python, native FFmpeg, playback and MediaStore on Android
+        uses: ReactiveCircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808 # v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: default
+          disable-animations: true
+          script: gradle -p android-native :app:connectedDebugAndroidTest -PEMULATOR_TEST -PALEJANDRINO_WEB_URL=https://proyalejandrino.vercel.app --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-runtime-api-${{ matrix.api-level }}
+          path: |
+            android-native/app/build/reports/androidTests/connected
+            android-native/app/build/outputs/androidTest-results/connected
+          retention-days: 5
+          if-no-files-found: ignore
+
   android:
+    needs: android-runtime
     runs-on: ubuntu-latest
     env:
       WEB_ORIGIN: ${{ inputs.web_origin || 'https://proyalejandrino.vercel.app' }}

@@ -12,9 +12,10 @@ android {
         applicationId 'cl.alejandrino.nativeapp'
         minSdk 29
         targetSdk 35
-        versionCode 6
-        versionName '0.5.1-capture-fixes'
-        ndk { abiFilters 'arm64-v8a' }
+        versionCode 7
+        versionName '0.5.2-media-runtime'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        ndk { abiFilters (project.hasProperty('EMULATOR_TEST') ? 'x86_64' : 'arm64-v8a') }
         buildConfigField 'String', 'ALEJANDRINO_WEB_URL', JsonOutput.toJson(project.findProperty('ALEJANDRINO_WEB_URL') ?: '')
     }
     buildFeatures { buildConfig true }
@@ -44,4 +45,6 @@ dependencies {
     implementation 'androidx.webkit:webkit:1.14.0'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
 }

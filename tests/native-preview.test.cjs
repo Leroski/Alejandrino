@@ -94,9 +94,11 @@ test('invalid requests never reach the native bridge; provider failure keeps a u
 test('descriptive captions replace generated titles, never personal names', () => {
   const metadata = { title: 'Video by judoka', description: '  Entrada de uchi-mata\ncon agarre de manga. https://example.com  ' };
   assert.equal(contentTitle(metadata), 'Entrada de uchi-mata con agarre de manga.');
-  for (const name of ['Video guardado', 'Instagram · 10-11, 23:50', 'TikTok · 11/11 00:20'])
+  for (const name of ['Video guardado', 'Instagram · 10-11, 23:50', 'TikTok · 11/11 00:20',
+    'Instagram · 11/11, 12:15 a. m.', 'Instagram · 11/11, 12:15 a.\u00a0m.',
+    'TikTok · 11/11, 1:15\u202fp.\u00a0m.', 'YouTube · 11/11, 01:15 PM'])
     assert.equal(videoTitle(name, metadata), contentTitle(metadata));
-  for (const name of ['Mi entrada de judo', 'Instagram · mi análisis', 'Uchi-mata'])
+  for (const name of ['Mi entrada de judo', 'Instagram · mi análisis', 'Uchi-mata', 'Instagram · 11/11, 12:15 a. m. — mi nota'])
     assert.equal(videoTitle(name, metadata), name);
   assert.equal(videoTitle('Video guardado', { title: 'Video by judoka' }), 'Video guardado');
   assert.equal(contentTitle({ title: 'Título útil', description: 'Descripción' }), 'Título útil');

@@ -4,8 +4,13 @@ import math
 import re
 import errno
 import socket
+import os
 from pathlib import Path
 from urllib.parse import urlsplit
+# This embedded app supports only its bundled extractors. yt-dlp's legacy plugin
+# loader also registers bare names such as "extractor" in sys.modules, so our
+# bridge module has an application-specific name and external plugins are off.
+os.environ["YTDLP_NO_PLUGINS"] = "1"
 import yt_dlp
 from yt_dlp.utils import DownloadError
 from yt_dlp.networking.exceptions import HTTPError, TransportError
