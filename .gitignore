@@ -57,6 +57,7 @@ next-env.d.ts
 /android-native/.idea/
 /android-native/local.properties
 /android-native/**/build/
+/android-native/app/src/androidTest/assets/media/
 
 # Python build/test caches
 __pycache__/

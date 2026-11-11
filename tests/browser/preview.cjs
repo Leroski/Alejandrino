@@ -16,7 +16,7 @@ const techniqueId = '019321ab-cdef-7abc-8def-0123456789ab';
       const errors = [], requests = [];
       page.on('pageerror', error => errors.push(error.message));
       page.on('request', request => requests.push({ url: request.url(), body: request.postData() || '' }));
-      let row = { id: techniqueId, user_id: userId, name: mode === 'new-link' ? 'Instagram · 10-11, 23:50' : 'Mi entrada de judo', discipline: '', position: '', category: '',
+      let row = { id: techniqueId, user_id: userId, name: mode === 'new-link' ? 'Instagram · 11/11, 12:15 a.\u00a0m.' : 'Mi entrada de judo', discipline: '', position: '', category: '',
         source: 'Instagram', url: 'https://www.instagram.com/reel/Fixture/', revision: 1,
         created_at: '2026-11-09T00:00:00Z', updated_at: '2026-11-09T00:00:00Z' };
       await page.route('https://fixture.supabase.co/**', async route => {
