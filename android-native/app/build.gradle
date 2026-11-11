@@ -12,8 +12,8 @@ android {
         applicationId 'cl.alejandrino.nativeapp'
         minSdk 29
         targetSdk 35
-        versionCode 4
-        versionName '0.4.0-media'
+        versionCode 5
+        versionName '0.5.0-previews'
         ndk { abiFilters 'arm64-v8a' }
         buildConfigField 'String', 'ALEJANDRINO_WEB_URL', JsonOutput.toJson(project.findProperty('ALEJANDRINO_WEB_URL') ?: '')
     }

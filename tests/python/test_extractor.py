@@ -88,5 +88,27 @@ class ExtractionTests(unittest.TestCase):
         with yt_dlp.YoutubeDL(FakeYdl.instances[0].opts) as actual:
             self.assertEqual(set(actual._ies),{'Instagram','InstagramIOS','TikTok','TikTokVM'})
 
+    def test_preview_never_downloads_and_returns_only_public_metadata(self):
+        FakeYdl.info={'title':'Technique', 'uploader':'Author', 'description':'Notes', 'duration':42,
+                      'thumbnail':'https://scontent.cdninstagram.com/test.jpg', 'cookies':'secret',
+                      'filepath':'/private/video.mp4', 'formats':[{'url':'private-stream'}]}
+        with patch.object(extractor.yt_dlp,'YoutubeDL',FakeYdl), patch.object(FakeYdl,'dl',side_effect=AssertionError('No media download')):
+            value=json.loads(extractor.preview(SOURCE,Guard()))
+        self.assertEqual(set(value), {'title','author','description','duration','thumbnail_url'})
+        self.assertEqual(value['title'],'Technique'); self.assertEqual(value['duration'],42)
+        self.assertTrue(FakeYdl.instances[0].opts['skip_download'])
+        self.assertNotIn('secret',json.dumps(value)); self.assertNotIn('private',json.dumps(value))
+
+    def test_metadata_limits_and_missing_fields(self):
+        value=extractor.public_metadata({'title':'x'*900, 'description':'y'*3000, 'uploader':{}, 'duration':float('nan')})
+        self.assertEqual(len(value['title']),500); self.assertEqual(len(value['description']),2000)
+        self.assertEqual(value['author'],''); self.assertEqual(value['duration'],0)
+        self.assertEqual(extractor.public_metadata({'duration':True})['duration'],0)
+
+    def test_cancelled_preview_never_reaches_provider(self):
+        guard=Guard(); guard.stopped=True
+        with patch.object(extractor.yt_dlp,'YoutubeDL',side_effect=AssertionError('No network')):
+            with self.assertRaises(RuntimeError): extractor.preview(SOURCE,guard)
+
 if __name__ == '__main__':
     unittest.main()

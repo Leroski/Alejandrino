@@ -26,6 +26,7 @@ export const nativeErrors = {
   STORAGE_FAILED: "No se pudo guardar el video. Revisa el espacio disponible y vuelve a intentarlo.",
   LOCAL_MISSING: "El archivo ya no está disponible en este dispositivo. Puedes descargarlo de nuevo.",
   OPEN_FAILED: "No se pudo abrir el video local. Vuelve a comprobar el archivo.",
+  PREVIEW_FAILED: "No se pudo obtener la vista previa. El video sigue guardado; puedes volver a intentarlo.",
 } as const;
 export type NativeErrorCode = keyof typeof nativeErrors;
 export class NativeCheckError extends Error {

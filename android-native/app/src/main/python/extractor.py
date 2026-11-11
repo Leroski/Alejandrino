@@ -1,5 +1,6 @@
 """Download bounded local tracks; Java remuxes, validates and publishes the MP4."""
 import json
+import math
 import re
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -47,6 +48,35 @@ class QuietLogger:
         pass
     def error(self, _message):
         pass
+
+
+def public_metadata(info):
+    def text(key, limit):
+        value = info.get(key)
+        return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", value).strip()[:limit] if isinstance(value, str) else ""
+    duration = info.get("duration")
+    if isinstance(duration, bool) or not isinstance(duration, (int, float)) or not math.isfinite(duration) or not 0 < duration <= 86400:
+        duration = 0
+    return {"title": text("title", 500), "author": text("uploader", 200) or text("channel", 200),
+            "description": text("description", 2000), "thumbnail_url": text("thumbnail", 4096), "duration": duration}
+
+
+def preview(url, guard):
+    """Read public text only on an explicit refresh; never download audiovisual data."""
+    if not valid_source(url):
+        raise ValueError("Unsupported source")
+    if guard.isStopped():
+        raise RuntimeError("Cancelled")
+    opts = {"skip_download": True, "noplaylist": True, "quiet": True, "noprogress": True,
+            "logger": QuietLogger(), "socket_timeout": 10, "retries": 0, "extractor_retries": 0,
+            "cachedir": False, "allowed_extractors": ["Instagram", "InstagramIOS", "TikTok", "vm[.]tiktok"]}
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    if guard.isStopped():
+        raise RuntimeError("Cancelled")
+    if not info or info.get("_type") in {"playlist", "multi_video"} or info.get("is_live"):
+        raise ValueError("Unsupported publication")
+    return json.dumps(public_metadata(info))
 
 
 def extract(url, directory, guard):
@@ -101,4 +131,4 @@ def extract(url, directory, guard):
             if completed_bytes > MAX_BYTES:
                 raise ValueError("Download too large")
             paths[role] = str(target)
-    return json.dumps({"video_path": paths["video"], "audio_path": paths.get("audio")})
+    return json.dumps({"video_path": paths["video"], "audio_path": paths.get("audio"), "metadata": public_metadata(info)})

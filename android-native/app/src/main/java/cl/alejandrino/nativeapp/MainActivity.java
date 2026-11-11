@@ -24,6 +24,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /** Fixed-origin shell. Every media operation verifies session and ownership first. */
@@ -34,6 +35,8 @@ public final class MainActivity extends Activity {
     private AllowedOrigin origin;
     private NativeCheckService checks;
     private NativeMediaService media;
+    private NativePreviewService previews;
+    private final ConcurrentHashMap<String, DownloadGuard> previewJobs = new ConcurrentHashMap<>();
     private static boolean recovered;
     private final AtomicReference<MediaOperation> activeMedia = new AtomicReference<>();
     private static final class MediaOperation {
@@ -61,6 +64,7 @@ public final class MainActivity extends Activity {
             if (!recovered) { index.recoverIncomplete(); recovered = true; }
             NativeAuthorizer authorizer = new NativeAuthorizer(origin);
             checks = new NativeCheckService(authorizer, index);
+            previews = new NativePreviewService(authorizer, new LocalPreviewFiles(this, index));
             media = new NativeMediaService(authorizer, new AndroidMediaFiles(this, index, (uri, guard) -> {
                 FutureTask<Void> open = new FutureTask<>(() -> {
                     guard.ensureActive();
@@ -91,7 +95,7 @@ public final class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
-                documentGeneration++; cancelMedia(false);
+                documentGeneration++; cancelMedia(false); cancelPreviews();
                 if (!origin.allows(url)) { view.stopLoading(); showError("El despliegue cambió de dominio. Revisa su acceso en Vercel."); }
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
@@ -181,6 +185,47 @@ public final class MainActivity extends Activity {
                     post.accept(NativeMediaService.error(operation.identity, operation.action, "BUSY"));
                 }
             });
+        WebViewCompat.addWebMessageListener(web, "AlejandrinoPreviewV1", Collections.singleton(origin.value),
+            (view, message, source, mainFrame, reply) -> {
+                if (!mainFrame || !origin.allows(source.toString()) || message.getType() != WebMessageCompat.TYPE_STRING) return;
+                String raw = message.getData();
+                JSONObject input = new JSONObject();
+                try {
+                    if (raw == null || raw.length() > 12288) throw new Exception();
+                    input = new JSONObject(raw);
+                    for (String field : new String[] {"requestId", "userId", "techniqueId"})
+                        if (!NativeCheckService.isUuid(input.opt(field))) throw new Exception();
+                } catch (Exception invalid) {
+                    reply.postMessage(NativeMediaService.error(input, "PREVIEW", "BAD_REQUEST").toString()); return;
+                }
+                String key = input.optString("userId") + ":" + input.optString("techniqueId") + ":" + input.optString("requestId");
+                if ("CANCEL".equals(input.opt("type"))) {
+                    DownloadGuard current = previewJobs.get(key);
+                    if (current != null) current.cancel();
+                    return;
+                }
+                if (previewJobs.size() >= 2) {
+                    reply.postMessage(NativeMediaService.error(input, "PREVIEW", "BUSY").toString()); return;
+                }
+                DownloadGuard guard = new DownloadGuard(60000);
+                if (previewJobs.putIfAbsent(key, guard) != null) {
+                    reply.postMessage(NativeMediaService.error(input, "PREVIEW", "BUSY").toString()); return;
+                }
+                final int generation = documentGeneration;
+                try {
+                    workers.execute(() -> {
+                        try {
+                            JSONObject response = previews.handle(raw, guard);
+                            runOnUiThread(() -> {
+                                if (web != null && generation == documentGeneration && origin.allows(web.getUrl())) reply.postMessage(response.toString());
+                            });
+                        } finally { previewJobs.remove(key, guard); }
+                    });
+                } catch (RejectedExecutionException busy) {
+                    previewJobs.remove(key, guard);
+                    reply.postMessage(NativeMediaService.error(input, "PREVIEW", "BUSY").toString());
+                }
+            });
         setContentView(webContainer);
         navigate(getIntent());
     }
@@ -222,9 +267,10 @@ public final class MainActivity extends Activity {
         MediaOperation current = activeMedia.get();
         if (current != null && (!downloadsOnly || "DOWNLOAD".equals(current.action))) current.guard.cancel();
     }
-    @Override protected void onStop() { cancelMedia(true); super.onStop(); }
+    private void cancelPreviews() { for (DownloadGuard guard : previewJobs.values()) guard.cancel(); }
+    @Override protected void onStop() { cancelMedia(true); cancelPreviews(); super.onStop(); }
     @Override protected void onDestroy() {
-        documentGeneration++; cancelMedia(false); workers.shutdownNow();
+        documentGeneration++; cancelMedia(false); cancelPreviews(); workers.shutdownNow();
         if (web != null) { web.destroy(); web = null; }
         super.onDestroy();
     }

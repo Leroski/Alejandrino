@@ -58,6 +58,9 @@ final class AndroidMediaFiles implements NativeMediaService.Files {
             JSONObject quality = inspect(output);
             progress.accept("saving");
             publish(output, verified.getString("userId"), verified.getString("techniqueId"), guard, beforePublish);
+            // Optional preview data must never turn a completed download into a failure.
+            try { new LocalPreviewFiles(context, index).saveMetadata(verified, tracks.optJSONObject("metadata")); }
+            catch (Exception ignored) { /* A manual preview refresh can retry later. */ }
             return quality;
         } finally { removeTemporary(folder); }
     }
